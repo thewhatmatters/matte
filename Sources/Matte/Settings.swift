@@ -84,6 +84,10 @@ final class Settings: ObservableObject {
     /// recognises its own full windows afterwards: a window still sitting on a
     /// rect we previously applied is one we sized, and should be re-fitted.
     @Published var appliedRects: [String: [[Double]]] { didSet { persist(appliedRects, Key.appliedRects) } }
+    /// Size newly created windows to the padded area. Off by default — it
+    /// catches windows apps meant to be small, and fights apps that set their
+    /// own size just after opening one.
+    @Published var fillNewWindows: Bool { didSet { defaults.set(fillNewWindows, forKey: Key.fillNew) } }
     /// Whether the expandable settings section is showing.
     @Published var showSettingsSection: Bool { didSet { defaults.set(showSettingsSection, forKey: Key.settingsSection) } }
     /// Whether the popover shows one slider for all edges or a field per edge.
@@ -103,6 +107,7 @@ final class Settings: ObservableObject {
         static let globalPadding = "globalPadding"
         static let overrides = "displayOverrides"
         static let appliedRects = "appliedRects"
+        static let fillNew = "fillNewWindows"
         static let settingsSection = "showSettingsSection"
         static let individualEdges = "editEdgesIndividually"
         static let excluded = "excludedBundleIDs"
@@ -115,6 +120,7 @@ final class Settings: ObservableObject {
         windowScope = WindowScope(rawValue: defaults.string(forKey: Key.windowScope) ?? "") ?? .largeWindows
         showOverlayOnChange = defaults.bool(forKey: Key.overlay)
         appliedRects = Self.decode(defaults.data(forKey: Key.appliedRects)) ?? [:]
+        fillNewWindows = defaults.bool(forKey: Key.fillNew)
         showSettingsSection = defaults.bool(forKey: Key.settingsSection)
         editEdgesIndividually = defaults.bool(forKey: Key.individualEdges)
         excludedBundleIDs = defaults.stringArray(forKey: Key.excluded) ?? []

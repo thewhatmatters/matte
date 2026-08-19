@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var screens: [NSScreen] = NSScreen.screens
+    @State private var didFill = false
     @State private var selectedKey: String = Settings.shared.initialEditingTarget()
         ?? Settings.key(for: NSScreen.main ?? NSScreen.screens[0])
 
@@ -64,6 +65,21 @@ struct SettingsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    toggleFill()
+                } label: {
+                    Text(didFill ? "Undo" : "Fill")
+                        .font(theme.font(11))
+                        .foregroundStyle(theme.textPrimary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(didFill
+                      ? "Put the windows back where they were"
+                      : "Size every window on this display to the padded area")
 
                 Button {
                     settings.editEdgesIndividually.toggle()
@@ -130,6 +146,8 @@ struct SettingsView: View {
             Toggle("Automatically re-size application windows", isOn: $settings.isEnabled)
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: settings.isEnabled) { commit() }
+            Toggle("Open new windows filled to the padding", isOn: $settings.fillNewWindows)
+                .toggleStyle(PanelCheckboxStyle())
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: launchAtLogin) { LoginItem.set(launchAtLogin) }
@@ -205,6 +223,16 @@ struct SettingsView: View {
                 })
     }
 
+    private func toggleFill() {
+        if didFill {
+            PaddingEngine.shared.undoFill()
+            didFill = false
+        } else if let screen = selectedScreen {
+            didFill = PaddingEngine.shared.fillWindows(on: screen) > 0
+        }
+        OverlayController.shared.flash()
+    }
+
     private func resetSelected() {
         if let screen = selectedScreen { settings.clearOverride(for: screen) }
         write(.zero)
@@ -215,6 +243,7 @@ struct SettingsView: View {
     }
 
     private func commit() {
+        didFill = false
         PaddingEngine.shared.settingsChanged()
         OverlayController.shared.flash()
     }

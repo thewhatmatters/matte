@@ -24,6 +24,11 @@ final class PaddingEngine {
     /// clamping alone can only ever push inward.
     private var filledWindows: [WindowKey: CGRect] = [:]
 
+    /// Frames captured before the last "fill windows" run, so it can be undone.
+    /// Window references can't outlive the process, which is fine — undo is only
+    /// ever offered for the run that just happened.
+    private var fillUndoStack: [(window: AXUIElement, frame: CGRect)] = []
+
     private init() {}
 
     // MARK: - Lifecycle
@@ -63,6 +68,7 @@ final class PaddingEngine {
 
     func settingsChanged() {
         stubbornWindows.removeAll()
+        fillUndoStack.removeAll()
         restartSweepTimer()
         applyToAllWindows()
     }
@@ -246,6 +252,63 @@ final class PaddingEngine {
         return true
     }
 
+    // MARK: - Filling
+
+    var canUndoFill: Bool { !fillUndoStack.isEmpty }
+
+    /// Sizes every eligible window on one screen to its padded rect.
+    @discardableResult
+    func fillWindows(on screen: NSScreen) -> Int {
+        guard AX.isTrusted, settings.isEnabled else { return 0 }
+        let padded = paddedRect(for: screen)
+        var snapshot: [(window: AXUIElement, frame: CGRect)] = []
+
+        for app in Self.managedApps() {
+            let pid = app.processIdentifier
+            for window in AX.elements(appElement(for: pid), kAXWindowsAttribute) {
+                guard isManageable(window: window), let axRect = AX.frame(window) else { continue }
+                let current = Coordinates.toAppKit(axRect)
+                guard let host = self.screen(for: current),
+                      Settings.key(for: host) == Settings.key(for: screen),
+                      !current.approximatelyEquals(padded) else { continue }
+                snapshot.append((window, current))
+                observeWindow(window, pid: pid)
+                fill(window: window, to: padded, key: WindowKey(window))
+            }
+        }
+        if !snapshot.isEmpty { fillUndoStack = snapshot }
+        return snapshot.count
+    }
+
+    func undoFill() {
+        let restore = fillUndoStack
+        fillUndoStack = []
+        isAdjusting = true
+        for entry in restore {
+            AX.setFrame(entry.window, Coordinates.toAccessibility(entry.frame))
+            filledWindows.removeValue(forKey: WindowKey(entry.window))
+        }
+        isAdjusting = false
+    }
+
+    func discardFillUndo() { fillUndoStack = [] }
+
+    /// Opt-in: size a freshly created window to the padded area. Windows that
+    /// open small are left alone — dialogs and palettes report as standard
+    /// windows too, and forcing those full is worse than doing nothing.
+    private func fillIfEligible(window: AXUIElement) {
+        guard settings.isEnabled, settings.fillNewWindows, AX.isTrusted else { return }
+        guard isManageable(window: window), let axRect = AX.frame(window) else { return }
+        let current = Coordinates.toAppKit(axRect)
+        guard let screen = screen(for: current) else { return }
+        let bounds = contentBounds(for: screen)
+        guard current.width >= bounds.width * 0.28,
+              current.height >= bounds.height * 0.28 else { return }
+        let padded = paddedRect(for: screen)
+        guard !current.approximatelyEquals(padded) else { return }
+        fill(window: window, to: padded, key: WindowKey(window))
+    }
+
     // MARK: - Observation
 
     private static func managedApps() -> [NSRunningApplication] {
@@ -322,6 +385,13 @@ final class PaddingEngine {
         switch notification {
         case kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification, kAXApplicationActivatedNotification:
             scheduleRecheck(after: 0.05) { [weak self] in self?.apply(toApp: pid) }
+            if notification == kAXWindowCreatedNotification, settings.fillNewWindows {
+                // Apps commonly set their own size just after creating a window;
+                // let that settle first so we aren't immediately overridden.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    self?.fillIfEligible(window: element)
+                }
+            }
         case kAXWindowMovedNotification, kAXWindowResizedNotification:
             if Self.mouseButtonIsDown {
                 // Wait for the drag to finish rather than yanking the window
