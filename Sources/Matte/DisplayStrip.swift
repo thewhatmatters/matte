@@ -133,8 +133,10 @@ struct DisplayStrip: View {
                     .frame(width: theme.deviceWidth,
                            height: (theme.deviceWidth / max(screen.frame.width / screen.frame.height, 0.1)).rounded())
                     .padding(-3)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
         }
+        .animation(.easeOut(duration: 0.18), value: isSelected)
     }
 
     /// One Mac, so the display's own name leads; the role goes underneath.
@@ -168,5 +170,6 @@ struct SelectionCaret: View {
             .frame(width: theme.caretSize, height: theme.caretSize / 2, alignment: .top)
             .clipped()
             .offset(x: offset, y: -theme.caretSize / 2)
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: offset)
     }
 }

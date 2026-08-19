@@ -167,6 +167,26 @@ final class Settings: ObservableObject {
         return Self.key(for: dockScreen)
     }
 
+    /// Padding as it was when the panel was last opened, so Reset restores what
+    /// was there rather than zeroing. Deliberately not persisted — it is a
+    /// per-session baseline, not a stored preference.
+    private var baselines: [String: EdgePadding] = [:]
+
+    func captureBaselines() {
+        baselines = Dictionary(uniqueKeysWithValues: NSScreen.screens.map {
+            (Self.key(for: $0), padding(for: $0))
+        })
+        objectWillChange.send()
+    }
+
+    func baseline(for screen: NSScreen) -> EdgePadding {
+        baselines[Self.key(for: screen)] ?? padding(for: screen)
+    }
+
+    func hasChanges(for screen: NSScreen) -> Bool {
+        padding(for: screen) != baseline(for: screen)
+    }
+
     /// Keeps a short history per display — long enough to recognise a window
     /// across a few padding changes, short enough not to match everything.
     private static let appliedRectHistoryLimit = 8

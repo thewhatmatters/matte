@@ -64,16 +64,36 @@ final class PanelController {
     func show(from button: NSStatusBarButton) {
         let window = window ?? makeWindow()
         self.window = window
+        // Reset is offered against the state the panel opened in.
+        Settings.shared.captureBaselines()
+
         controller?.view.layoutSubtreeIfNeeded()
         position(window, under: button)
+
+        window.alphaValue = 0
         window.makeKeyAndOrderFront(nil)
+        let landed = window.frame
+        window.setFrameOrigin(NSPoint(x: landed.origin.x, y: landed.origin.y + 6))
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().alphaValue = 1
+            window.animator().setFrameOrigin(landed.origin)
+        }
+
         installMonitors()
     }
 
     func close() {
         removeMonitors()
-        window?.orderOut(nil)
-        onClose?()
+        guard let window, window.isVisible else { onClose?(); return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.10
+            window.animator().alphaValue = 0
+        } completionHandler: { [weak self] in
+            window.orderOut(nil)
+            self?.onClose?()
+        }
     }
 
     // MARK: - Plumbing

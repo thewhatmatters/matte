@@ -16,11 +16,16 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             header
             paddingSection
-            if settings.showSettingsSection { settingsSection }
+            if settings.showSettingsSection {
+                settingsSection
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             footer
         }
         .frame(width: theme.width)
         .background(theme.panelFill)
+        .animation(.easeOut(duration: 0.18), value: hasChanges)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedKey)
         .onReceive(ticker) { _ in tick() }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didChangeScreenParametersNotification)) { _ in
@@ -36,7 +41,7 @@ struct SettingsView: View {
 
     private var header: some View {
         DisplayStrip(screens: screens,
-                     selectedKey: $selectedKey,
+                     selectedKey: $selectedKey.animation(.spring(response: 0.32, dampingFraction: 0.86)),
                      paddingFor: { settings.padding(for: $0) })
             .overlay(alignment: .bottom) {
                 Rectangle().fill(theme.divider).frame(height: 1)
@@ -52,19 +57,23 @@ struct SettingsView: View {
                     .font(theme.font(11, .medium))
                     .foregroundStyle(theme.textLabel)
                 Spacer()
-                Button {
-                    resetSelected()
-                } label: {
-                    HStack(spacing: 4) {
-                        ResetGlyph()
-                        Text("Reset").font(theme.font(11))
+                if hasChanges {
+                    Button {
+                        resetSelected()
+                    } label: {
+                        HStack(spacing: 4) {
+                            ResetGlyph()
+                            Text("Reset").font(theme.font(11))
+                        }
+                        .foregroundStyle(theme.textPrimary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(theme.textPrimary)
-                    .padding(.horizontal, 8)
-                    .frame(height: 24)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .help("Restore the padding this display had when the panel opened")
+                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 }
-                .buttonStyle(.plain)
 
                 Button {
                     toggleFill()
@@ -82,7 +91,9 @@ struct SettingsView: View {
                       : "Size every window on this display to the padded area")
 
                 Button {
-                    settings.editEdgesIndividually.toggle()
+                    withAnimation(.easeOut(duration: 0.20)) {
+                        settings.editEdgesIndividually.toggle()
+                    }
                 } label: {
                     CornerGlyph(lit: nil)
                 }
@@ -93,12 +104,14 @@ struct SettingsView: View {
 
             if settings.editEdgesIndividually {
                 SegmentedFieldRow(binding: binding(for:))
+                    .transition(.opacity)
             } else {
                 HStack(spacing: 16) {
                     PanelSlider(value: uniformBinding, range: 0...Settings.maxPadding,
                                 label: "Padding, all edges")
                     numberBox(uniformBinding)
                 }
+                .transition(.opacity)
             }
 
             if !isTrusted { permissionNote }
@@ -164,7 +177,11 @@ struct SettingsView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button("Settings") { settings.showSettingsSection.toggle() }
+            Button("Settings") {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    settings.showSettingsSection.toggle()
+                }
+            }
                 .buttonStyle(GhostButtonStyle())
             Spacer()
             Button("Apply") {
@@ -233,9 +250,15 @@ struct SettingsView: View {
         OverlayController.shared.flash()
     }
 
+    private var hasChanges: Bool {
+        selectedScreen.map { settings.hasChanges(for: $0) } ?? false
+    }
+
+    /// Restores what this display had when the panel opened — not zero, unless
+    /// zero is what it had.
     private func resetSelected() {
-        if let screen = selectedScreen { settings.clearOverride(for: screen) }
-        write(.zero)
+        guard let screen = selectedScreen else { return }
+        write(settings.baseline(for: screen))
     }
 
     private func clamped(_ value: Double) -> Double {

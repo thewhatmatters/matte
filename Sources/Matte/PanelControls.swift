@@ -10,6 +10,7 @@ struct PanelSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double>
     var label: String
+    @State private var isDragging = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -23,16 +24,22 @@ struct PanelSlider: View {
                     .frame(width: x + theme.knobSize / 2, height: theme.trackHeight)
                 Circle().fill(theme.knobFill)
                     .frame(width: theme.knobSize, height: theme.knobSize)
+                    .scaleEffect(isDragging ? 1.12 : 1)
+                    .shadow(color: .black.opacity(isDragging ? 0.35 : 0), radius: 3)
                     .offset(x: x)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isDragging)
             }
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 0).onChanged { drag in
-                    let position = min(max(drag.location.x - theme.knobSize / 2, 0), usable)
-                    value = (range.lowerBound + (position / usable)
-                             * (range.upperBound - range.lowerBound)).rounded()
-                }
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        isDragging = true
+                        let position = min(max(drag.location.x - theme.knobSize / 2, 0), usable)
+                        value = (range.lowerBound + (position / usable)
+                                 * (range.upperBound - range.lowerBound)).rounded()
+                    }
+                    .onEnded { _ in isDragging = false }
             )
         }
         .frame(height: theme.knobSize)
@@ -181,8 +188,10 @@ struct PanelCheckboxStyle: ToggleStyle {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(theme.checkMark)
                             .opacity(configuration.isOn ? 1 : 0)
+                            .scaleEffect(configuration.isOn ? 1 : 0.6)
                     }
                     .frame(width: 16, height: 16)
+                    .animation(.spring(response: 0.26, dampingFraction: 0.7), value: configuration.isOn)
                 configuration.label
                     .font(theme.font(12.5))
                     .foregroundStyle(theme.textSecondary)
