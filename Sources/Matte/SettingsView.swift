@@ -13,7 +13,6 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            titleBar
             header
             paddingSection
             if settings.showSettingsSection { settingsSection }
@@ -29,27 +28,6 @@ struct SettingsView: View {
             if !screens.contains(where: { Settings.key(for: $0) == selectedKey }) {
                 selectedKey = screens.first.map(Settings.key(for:)) ?? ""
             }
-        }
-    }
-
-    // MARK: - Title bar
-
-    /// Not in the design, but the master on/off has to live somewhere visible.
-    private var titleBar: some View {
-        HStack {
-            Text("Matte")
-                .font(theme.font(12, .semibold))
-                .foregroundStyle(theme.textSecondary)
-            Spacer()
-            Toggle("Enable padding", isOn: $settings.isEnabled)
-                .toggleStyle(PanelSwitchStyle())
-                .labelsHidden()
-                .onChange(of: settings.isEnabled) { commit() }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.divider).frame(height: 1)
         }
     }
 
@@ -77,8 +55,7 @@ struct SettingsView: View {
                     resetSelected()
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 10, weight: .medium))
+                        ResetGlyph()
                         Text("Reset").font(theme.font(11))
                     }
                     .foregroundStyle(theme.textPrimary)
@@ -91,8 +68,7 @@ struct SettingsView: View {
                 Button {
                     settings.editEdgesIndividually.toggle()
                 } label: {
-                    EdgeGlyph(edge: .top).opacity(0)
-                        .overlay { AllCornersGlyph() }
+                    CornerGlyph(lit: nil)
                 }
                 .buttonStyle(IconButtonStyle(isActive: settings.editEdgesIndividually))
                 .help(settings.editEdgesIndividually
@@ -117,8 +93,6 @@ struct SettingsView: View {
         .overlay(alignment: .top) {
             SelectionCaret(offset: caretOffset)
         }
-        .disabled(!settings.isEnabled)
-        .opacity(settings.isEnabled ? 1 : 0.45)
     }
 
     private func numberBox(_ value: Binding<Double>) -> some View {
@@ -153,8 +127,9 @@ struct SettingsView: View {
 
             Toggle("Show padding outline while adjusting", isOn: $settings.showOverlayOnChange)
                 .toggleStyle(PanelCheckboxStyle())
-            Toggle("Resize every window, not just large ones", isOn: allWindowsBinding)
+            Toggle("Automatically re-size application windows", isOn: $settings.isEnabled)
                 .toggleStyle(PanelCheckboxStyle())
+                .onChange(of: settings.isEnabled) { commit() }
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: launchAtLogin) { LoginItem.set(launchAtLogin) }
@@ -179,7 +154,6 @@ struct SettingsView: View {
                 OverlayController.shared.flash()
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(!settings.isEnabled)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -231,11 +205,6 @@ struct SettingsView: View {
                 })
     }
 
-    private var allWindowsBinding: Binding<Bool> {
-        Binding(get: { settings.windowScope == .allWindows },
-                set: { settings.windowScope = $0 ? .allWindows : .largeWindows; commit() })
-    }
-
     private func resetSelected() {
         if let screen = selectedScreen { settings.clearOverride(for: screen) }
         write(.zero)
@@ -256,30 +225,5 @@ struct SettingsView: View {
             isTrusted = trusted
             if trusted { PaddingEngine.shared.retryAfterPermissionGranted() }
         }
-    }
-}
-
-/// The design's four-corner bracket, used on the expand button itself.
-struct AllCornersGlyph: View {
-    var body: some View {
-        Canvas { context, size in
-            let s = size.width / 12
-            let paths: [[CGPoint]] = [
-                [CGPoint(x: 1.5, y: 3.5), CGPoint(x: 1.5, y: 2.5), CGPoint(x: 3.5, y: 1.5)],
-                [CGPoint(x: 8.5, y: 1.5), CGPoint(x: 10.5, y: 2.5), CGPoint(x: 10.5, y: 3.5)],
-                [CGPoint(x: 10.5, y: 8.5), CGPoint(x: 10.5, y: 10.5), CGPoint(x: 8.5, y: 10.5)],
-                [CGPoint(x: 3.5, y: 10.5), CGPoint(x: 1.5, y: 10.5), CGPoint(x: 1.5, y: 8.5)]
-            ]
-            for points in paths {
-                var path = Path()
-                path.move(to: CGPoint(x: points[0].x * s, y: points[0].y * s))
-                for point in points.dropFirst() {
-                    path.addLine(to: CGPoint(x: point.x * s, y: point.y * s))
-                }
-                context.stroke(path, with: .color(.white),
-                               style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
-            }
-        }
-        .frame(width: 12, height: 12)
     }
 }

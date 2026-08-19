@@ -60,6 +60,17 @@ struct PanelSlider: View {
 /// TextField can't be restyled — TextFieldStyle has no usable requirement — so
 /// this strips it to `.plain` and draws the surface underneath.
 struct PanelNumberField: View {
+    /// The design draws a corner per field, in reading order, so each edge is
+    /// paired with the corner that sits in its slot.
+    static func corner(for edge: EdgePadding.Edge) -> Glyph.Corner {
+        switch edge {
+        case .top: return .topLeft
+        case .right: return .topRight
+        case .bottom: return .bottomLeft
+        case .left: return .bottomRight
+        }
+    }
+
     @Binding var value: Double
     /// nil means "share the row equally" — used by the four-up edge row.
     var width: CGFloat? = 48
@@ -68,7 +79,7 @@ struct PanelNumberField: View {
     var body: some View {
         HStack(spacing: 4) {
             if let edge {
-                EdgeGlyph(edge: edge).frame(width: 24, height: 24)
+                CornerGlyph(lit: Self.corner(for: edge)).frame(width: 24, height: 24)
             }
             TextField("", value: $value, format: .number.precision(.fractionLength(0)))
                 .textFieldStyle(.plain)
@@ -80,44 +91,6 @@ struct PanelNumberField: View {
         .padding(.trailing, 4)
         .frame(width: width, height: theme.fieldHeight)
         .frame(maxWidth: width == nil ? .infinity : nil)
-    }
-}
-
-/// The design's 12×12 bracket glyph: four corner brackets at 10%, with the
-/// edge this field controls drawn through at full strength. The mock lit a
-/// corner; an edge is what the number actually does.
-struct EdgeGlyph: View {
-    let edge: EdgePadding.Edge
-
-    var body: some View {
-        Canvas { context, size in
-            let s = size.width / 12
-            func stroke(_ points: [CGPoint], opacity: Double, width: CGFloat) {
-                var path = Path()
-                path.move(to: CGPoint(x: points[0].x * s, y: points[0].y * s))
-                for point in points.dropFirst() {
-                    path.addLine(to: CGPoint(x: point.x * s, y: point.y * s))
-                }
-                context.stroke(path, with: .color(.white.opacity(opacity)),
-                               style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-            }
-
-            // Corner brackets, always present, faint.
-            stroke([CGPoint(x: 1.5, y: 3.5), CGPoint(x: 1.5, y: 2.5), CGPoint(x: 3.5, y: 1.5)], opacity: 0.10, width: 1)
-            stroke([CGPoint(x: 8.5, y: 1.5), CGPoint(x: 10.5, y: 2.5), CGPoint(x: 10.5, y: 3.5)], opacity: 0.10, width: 1)
-            stroke([CGPoint(x: 10.5, y: 8.5), CGPoint(x: 10.5, y: 10.5), CGPoint(x: 8.5, y: 10.5)], opacity: 0.10, width: 1)
-            stroke([CGPoint(x: 3.5, y: 10.5), CGPoint(x: 1.5, y: 10.5), CGPoint(x: 1.5, y: 8.5)], opacity: 0.10, width: 1)
-
-            // The live edge.
-            switch edge {
-            case .top:    stroke([CGPoint(x: 2.5, y: 1.5), CGPoint(x: 9.5, y: 1.5)], opacity: 1, width: 1.5)
-            case .right:  stroke([CGPoint(x: 10.5, y: 2.5), CGPoint(x: 10.5, y: 9.5)], opacity: 1, width: 1.5)
-            case .bottom: stroke([CGPoint(x: 2.5, y: 10.5), CGPoint(x: 9.5, y: 10.5)], opacity: 1, width: 1.5)
-            case .left:   stroke([CGPoint(x: 1.5, y: 2.5), CGPoint(x: 1.5, y: 9.5)], opacity: 1, width: 1.5)
-            }
-        }
-        .frame(width: 12, height: 12)
-        .accessibilityHidden(true)
     }
 }
 
