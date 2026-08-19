@@ -4,347 +4,245 @@ struct SettingsView: View {
     @ObservedObject private var settings = Settings.shared
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
-    /// nil == the "All displays" default; otherwise the key of a specific screen.
-    @State private var targetKey: String? = Settings.shared.initialEditingTarget()
     @State private var screens: [NSScreen] = NSScreen.screens
+    @State private var selectedKey: String = Settings.shared.initialEditingTarget()
+        ?? Settings.key(for: NSScreen.main ?? NSScreen.screens[0])
 
+    private let theme = Theme.current
     private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
-    private var theme: Theme { settings.theme }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: theme.sectionSpacing) {
+        VStack(spacing: 0) {
+            titleBar
             header
-            if !isTrusted { permissionBanner }
-
-            divider
-            displayRow
-            paddingCard
-            presets
-
-            divider
-            options
-
-            divider
+            paddingSection
+            if settings.showSettingsSection { settingsSection }
             footer
         }
-        .padding(theme.panelPadding)
-        .frame(width: 360)
-        .environment(\.theme, theme)
+        .frame(width: theme.width)
+        .background(theme.panelFill)
         .onReceive(ticker) { _ in tick() }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didChangeScreenParametersNotification)) { _ in
             screens = NSScreen.screens
-            if let key = targetKey, !screens.contains(where: { Settings.key(for: $0) == key }) {
-                targetKey = nil
+            Wallpaper.invalidate()
+            if !screens.contains(where: { Settings.key(for: $0) == selectedKey }) {
+                selectedKey = screens.first.map(Settings.key(for:)) ?? ""
             }
         }
     }
 
-    private var divider: some View {
-        Rectangle().fill(theme.dividerColor).frame(height: 1)
+    // MARK: - Title bar
+
+    /// Not in the design, but the master on/off has to live somewhere visible.
+    private var titleBar: some View {
+        HStack {
+            Text("Matte")
+                .font(theme.font(12, .semibold))
+                .foregroundStyle(theme.textSecondary)
+            Spacer()
+            Toggle("Enable padding", isOn: $settings.isEnabled)
+                .toggleStyle(PanelSwitchStyle())
+                .labelsHidden()
+                .onChange(of: settings.isEnabled) { commit() }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(theme.divider).frame(height: 1)
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Matte")
-                    .font(theme.titleFont)
-                    .foregroundStyle(theme.textPrimary)
-                Text(DockInfo.summary)
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
+        DisplayStrip(screens: screens,
+                     selectedKey: $selectedKey,
+                     paddingFor: { settings.padding(for: $0) })
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(theme.divider).frame(height: 1)
             }
-            Spacer()
-            Toggle("", isOn: $settings.isEnabled)
-                .toggleStyle(PanelSwitchStyle())
-                .labelsHidden()
-                .fixedSize()
-                .onChange(of: settings.isEnabled) { commit() }
-        }
-    }
-
-    private var permissionBanner: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Label("Accessibility access required", systemImage: "exclamationmark.triangle.fill")
-                .font(theme.labelFont.weight(.semibold))
-                .foregroundStyle(theme.textPrimary)
-            Text("Padding works by resizing other apps' windows, which macOS gates behind Accessibility.")
-                .font(theme.labelFont)
-                .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 6) {
-                Button("Grant Access…") { AX.requestTrust() }
-                    .buttonStyle(PanelButtonStyle(prominent: true))
-                Button("Open Settings") { openAccessibilitySettings() }
-                    .buttonStyle(PanelButtonStyle())
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: theme.controlRadius)
-                .fill(Color.orange.opacity(0.16))
-                .overlay(RoundedRectangle(cornerRadius: theme.controlRadius)
-                    .stroke(Color.orange.opacity(0.35), lineWidth: 1))
-        )
-    }
-
-    // MARK: - Display
-
-    private var displayRow: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
-                Text("Display")
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
-                    .frame(width: 52, alignment: .leading)
-
-                Menu {
-                    Button("All displays") { targetKey = nil }
-                    ForEach(screens, id: \.self) { screen in
-                        Button(label(for: screen)) { targetKey = Settings.key(for: screen) }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(targetScreen.map(label(for:)) ?? "All displays")
-                            .font(theme.labelFont)
-                            .foregroundStyle(theme.textPrimary)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(theme.textSecondary)
-                    }
-                    .padding(.horizontal, 8)
-                    .frame(height: theme.rowHeight - 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: theme.controlRadius)
-                            .fill(theme.prefersBorders ? Color.clear : theme.controlFill)
-                            .overlay(RoundedRectangle(cornerRadius: theme.controlRadius)
-                                .stroke(theme.border, lineWidth: 1))
-                    )
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let screen = targetScreen, settings.hasOverride(screen) {
-                HStack(spacing: 6) {
-                    Text("Custom padding for this display.")
-                        .font(theme.labelFont)
-                        .foregroundStyle(theme.textSecondary)
-                    Spacer()
-                    Button("Reset") {
-                        settings.clearOverride(for: screen)
-                        commit()
-                    }
-                    .buttonStyle(PanelButtonStyle())
-                }
-                .padding(.leading, 60)
-            }
-        }
-        .disabled(!settings.isEnabled)
-        .opacity(settings.isEnabled ? 1 : 0.45)
     }
 
     // MARK: - Padding
 
-    private var paddingCard: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
+    private var paddingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
                 Text("Padding")
-                    .font(theme.labelFont.weight(.medium))
-                    .foregroundStyle(theme.textPrimary)
+                    .font(theme.font(11, .medium))
+                    .foregroundStyle(theme.textLabel)
                 Spacer()
+                Button {
+                    resetSelected()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 10, weight: .medium))
+                        Text("Reset").font(theme.font(11))
+                    }
+                    .foregroundStyle(theme.textPrimary)
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     settings.editEdgesIndividually.toggle()
                 } label: {
-                    Image(systemName: "viewfinder")
-                        .font(.system(size: 12, weight: .medium))
+                    EdgeGlyph(edge: .top).opacity(0)
+                        .overlay { AllCornersGlyph() }
                 }
-                .buttonStyle(PanelIconButtonStyle(isActive: settings.editEdgesIndividually))
+                .buttonStyle(IconButtonStyle(isActive: settings.editEdgesIndividually))
                 .help(settings.editEdgesIndividually
-                      ? "Use one value for every edge"
-                      : "Set each edge separately")
+                      ? "Use one value for every edge" : "Set each edge separately")
             }
 
             if settings.editEdgesIndividually {
-                individualEdgeFields
+                SegmentedFieldRow(binding: binding(for:))
             } else {
-                HStack(spacing: 10) {
+                HStack(spacing: 16) {
                     PanelSlider(value: uniformBinding, range: 0...Settings.maxPadding,
                                 label: "Padding, all edges")
-                    PanelNumberField(value: uniformBinding)
+                    numberBox(uniformBinding)
                 }
             }
+
+            if !isTrusted { permissionNote }
         }
-        .padding(10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: theme.controlRadius + 2)
-                .fill(theme.prefersBorders ? Color.clear : theme.controlFill.opacity(0.6))
-                .overlay(RoundedRectangle(cornerRadius: theme.controlRadius + 2)
-                    .stroke(theme.border, lineWidth: 1))
-        )
+        .overlay(alignment: .top) {
+            SelectionCaret(offset: caretOffset)
+        }
         .disabled(!settings.isEnabled)
         .opacity(settings.isEnabled ? 1 : 0.45)
     }
 
-    private var individualEdgeFields: some View {
-        HStack(spacing: 6) {
-            ForEach(EdgePadding.Edge.allCases) { edge in
-                VStack(spacing: 4) {
-                    Image(systemName: edge.symbol)
-                        .font(.system(size: 9))
-                        .foregroundStyle(theme.textSecondary)
-                    PanelNumberField(value: binding(for: edge), width: 46)
-                }
-                .frame(maxWidth: .infinity)
-                .help(edge.label)
-            }
-        }
+    private func numberBox(_ value: Binding<Double>) -> some View {
+        PanelNumberField(value: value, width: 48)
+            .background(RoundedRectangle(cornerRadius: theme.fieldRadius).fill(theme.fieldFill))
+            .overlay(RoundedRectangle(cornerRadius: theme.fieldRadius)
+                .stroke(theme.fieldBorder, lineWidth: 1))
     }
 
-    private var presets: some View {
-        HStack(spacing: 6) {
-            Button("Match Dock") { matchDock() }
-                .help("Adds a gap on the Dock's edge, on the display it lives on.")
-            Button("Even") { setAll(40) }
-            Button("Clear") { setAll(0) }
-            Spacer()
-        }
-        .buttonStyle(PanelButtonStyle())
-        .disabled(!settings.isEnabled)
-        .opacity(settings.isEnabled ? 1 : 0.45)
-    }
-
-    // MARK: - Options
-
-    private var options: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                Text("Affects")
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
-                    .frame(width: 52, alignment: .leading)
-                PanelSegmented(selection: $settings.windowScope,
-                               options: WindowScope.allCases.map { ($0, $0.label) })
-                    .onChange(of: settings.windowScope) { commit() }
-            }
-
-            Text(settings.windowScope.help)
-                .font(theme.labelFont)
+    private var permissionNote: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text("Accessibility access is required to resize windows.")
+                .font(theme.font(11))
                 .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Grant") { AX.requestTrust() }
+                .buttonStyle(GhostButtonStyle())
+        }
+    }
+
+    // MARK: - Settings
+
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Settings")
+                .font(theme.font(11, .medium))
+                .foregroundStyle(theme.textLabel)
+                .padding(.horizontal, 6)
+                .padding(.bottom, 4)
 
             Toggle("Show padding outline while adjusting", isOn: $settings.showOverlayOnChange)
+                .toggleStyle(PanelCheckboxStyle())
+            Toggle("Resize every window, not just large ones", isOn: allWindowsBinding)
                 .toggleStyle(PanelCheckboxStyle())
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: launchAtLogin) { LoginItem.set(launchAtLogin) }
         }
-        .disabled(!settings.isEnabled)
-        .opacity(settings.isEnabled ? 1 : 0.45)
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.settingsFill)
+        .overlay(alignment: .top) {
+            Rectangle().fill(theme.divider).frame(height: 1)
+        }
     }
 
     // MARK: - Footer
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                Text("Theme")
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
-                    .frame(width: 52, alignment: .leading)
-                PanelSegmented(selection: $settings.themeID,
-                               options: Theme.all.map { ($0.id, $0.name) })
+        HStack(spacing: 12) {
+            Button("Settings") { settings.showSettingsSection.toggle() }
+                .buttonStyle(GhostButtonStyle())
+            Spacer()
+            Button("Apply") {
+                PaddingEngine.shared.applyToAllWindows()
+                OverlayController.shared.flash()
             }
-            Text(theme.blurb)
-                .font(theme.labelFont)
-                .foregroundStyle(theme.textSecondary)
-
-            HStack {
-                Button("Apply Now") {
-                    PaddingEngine.shared.applyToAllWindows()
-                    OverlayController.shared.flash()
-                }
-                .buttonStyle(PanelButtonStyle(prominent: true))
-                .disabled(!settings.isEnabled)
-                Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
-                    .buttonStyle(PanelButtonStyle())
-            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!settings.isEnabled)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(theme.footerFill)
+        .overlay(alignment: .top) {
+            Rectangle().fill(theme.hairline).frame(height: 1)
         }
     }
 
-    // MARK: - Editing target
+    // MARK: - State
 
-    private var targetScreen: NSScreen? {
-        guard let targetKey else { return nil }
-        return screens.first { Settings.key(for: $0) == targetKey }
+    private var selectedScreen: NSScreen? {
+        screens.first { Settings.key(for: $0) == selectedKey }
+    }
+
+    /// Centre of the selected tile, relative to the panel's centre.
+    private var caretOffset: CGFloat {
+        guard let index = screens.firstIndex(where: { Settings.key(for: $0) == selectedKey }) else { return 0 }
+        let count = CGFloat(screens.count)
+        let stride = theme.tileWidth + theme.tileGap
+        let first = -(stride * (count - 1)) / 2
+        return first + stride * CGFloat(index)
     }
 
     private var currentPadding: EdgePadding {
-        if let screen = targetScreen { return settings.padding(for: screen) }
-        return settings.globalPadding
+        selectedScreen.map { settings.padding(for: $0) } ?? settings.globalPadding
     }
 
     private func write(_ padding: EdgePadding) {
-        settings.setPadding(padding, for: targetScreen)
+        settings.setPadding(padding, for: selectedScreen)
         commit()
     }
 
     private func binding(for edge: EdgePadding.Edge) -> Binding<Double> {
-        Binding(
-            get: { currentPadding[edge] },
-            set: { newValue in
-                var padding = currentPadding
-                padding[edge] = clamped(newValue)
-                write(padding)
-            }
-        )
+        Binding(get: { currentPadding[edge] },
+                set: { newValue in
+                    var padding = currentPadding
+                    padding[edge] = clamped(newValue)
+                    write(padding)
+                })
     }
 
-    /// Uniform mode shows the largest edge, so switching modes never silently
-    /// discards a value the user set.
     private var uniformBinding: Binding<Double> {
-        Binding(
-            get: {
-                let padding = currentPadding
-                return EdgePadding.Edge.allCases.map { padding[$0] }.max() ?? 0
-            },
-            set: { setAll(clamped($0)) }
-        )
+        Binding(get: { EdgePadding.Edge.allCases.map { currentPadding[$0] }.max() ?? 0 },
+                set: { newValue in
+                    var padding = EdgePadding.zero
+                    EdgePadding.Edge.allCases.forEach { padding[$0] = clamped(newValue) }
+                    write(padding)
+                })
     }
 
-    private func setAll(_ value: Double) {
-        var padding = EdgePadding.zero
-        EdgePadding.Edge.allCases.forEach { padding[$0] = value }
-        write(padding)
+    private var allWindowsBinding: Binding<Bool> {
+        Binding(get: { settings.windowScope == .allWindows },
+                set: { settings.windowScope = $0 ? .allWindows : .largeWindows; commit() })
+    }
+
+    private func resetSelected() {
+        if let screen = selectedScreen { settings.clearOverride(for: screen) }
+        write(.zero)
     }
 
     private func clamped(_ value: Double) -> Double {
         min(max(value.rounded(), 0), Settings.maxPadding)
-    }
-
-    private func label(for screen: NSScreen) -> String {
-        "\(screen.localizedName) — \(Int(screen.frame.width))×\(Int(screen.frame.height))"
-    }
-
-    // MARK: - Actions
-
-    private func matchDock() {
-        guard let dockScreen = DockInfo.hostScreen() ?? NSScreen.main else { return }
-        var padding = settings.padding(for: dockScreen)
-        padding[DockInfo.position.edge] = DockInfo.suggestedPadding(for: dockScreen)
-        settings.setPadding(padding, for: dockScreen)
-        targetKey = Settings.key(for: dockScreen)
-        settings.editEdgesIndividually = true
-        commit()
     }
 
     private func commit() {
@@ -359,9 +257,29 @@ struct SettingsView: View {
             if trusted { PaddingEngine.shared.retryAfterPermissionGranted() }
         }
     }
+}
 
-    private func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+/// The design's four-corner bracket, used on the expand button itself.
+struct AllCornersGlyph: View {
+    var body: some View {
+        Canvas { context, size in
+            let s = size.width / 12
+            let paths: [[CGPoint]] = [
+                [CGPoint(x: 1.5, y: 3.5), CGPoint(x: 1.5, y: 2.5), CGPoint(x: 3.5, y: 1.5)],
+                [CGPoint(x: 8.5, y: 1.5), CGPoint(x: 10.5, y: 2.5), CGPoint(x: 10.5, y: 3.5)],
+                [CGPoint(x: 10.5, y: 8.5), CGPoint(x: 10.5, y: 10.5), CGPoint(x: 8.5, y: 10.5)],
+                [CGPoint(x: 3.5, y: 10.5), CGPoint(x: 1.5, y: 10.5), CGPoint(x: 1.5, y: 8.5)]
+            ]
+            for points in paths {
+                var path = Path()
+                path.move(to: CGPoint(x: points[0].x * s, y: points[0].y * s))
+                for point in points.dropFirst() {
+                    path.addLine(to: CGPoint(x: point.x * s, y: point.y * s))
+                }
+                context.stroke(path, with: .color(.white),
+                               style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
+            }
+        }
+        .frame(width: 12, height: 12)
     }
 }

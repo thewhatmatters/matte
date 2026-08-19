@@ -6,7 +6,7 @@ import SwiftUI
 /// still take key focus for text editing without activating the whole app.
 final class PanelWindow: NSPanel {
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 360, height: 400),
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 554, height: 400),
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered,
                    defer: false)
@@ -19,6 +19,8 @@ final class PanelWindow: NSPanel {
         hidesOnDeactivate = false
         isMovableByWindowBackground = false
         animationBehavior = .utilityWindow
+        // The design is a fixed dark surface; don't let light mode tint it.
+        appearance = NSAppearance(named: .darkAqua)
     }
 
     // Needed so text fields inside the panel can be edited.
@@ -28,52 +30,17 @@ final class PanelWindow: NSPanel {
     override func cancelOperation(_ sender: Any?) { orderOut(nil) }
 }
 
-/// The window is transparent; this view is the panel's entire visible surface.
-struct VisualEffectBackground: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
-    }
-}
-
-/// Backdrop, corner radius and hairline for the panel, driven by the theme.
-struct PanelChrome<Content: View>: View {
-    let theme: Theme
-    @ViewBuilder let content: Content
+/// Root of the panel: the content plus the design's corner radius and hairline.
+/// The window itself is transparent, so this view is the entire visible surface.
+struct PanelRoot: View {
+    private let theme = Theme.current
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: theme.panelRadius, style: .continuous)
-        content
-            .background {
-                switch theme.backdrop {
-                case .vibrancy(let material): VisualEffectBackground(material: material)
-                case .solid: Color(nsColor: .windowBackgroundColor)
-                }
-            }
+        SettingsView()
+            .background(theme.panelFill)
             .clipShape(shape)
-            .overlay { shape.stroke(theme.border, lineWidth: 1) }
-    }
-}
-
-/// Root of the panel. Observing Settings here means a theme change re-renders
-/// the chrome *and* the content without the controller replacing the root view
-/// — which would reset the view's `@State` (selected display, focus).
-struct PanelRoot: View {
-    @ObservedObject private var settings = Settings.shared
-
-    var body: some View {
-        PanelChrome(theme: settings.theme) {
-            SettingsView()
-        }
+            .overlay { shape.stroke(theme.hairline, lineWidth: 1) }
     }
 }
 
@@ -90,15 +57,13 @@ final class PanelController {
     var isVisible: Bool { window?.isVisible ?? false }
     var onClose: (() -> Void)?
 
-    func toggle(from button: NSStatusBarButton, theme: Theme) {
-        isVisible ? close() : show(from: button, theme: theme)
+    func toggle(from button: NSStatusBarButton) {
+        isVisible ? close() : show(from: button)
     }
 
-    func show(from button: NSStatusBarButton, theme: Theme) {
+    func show(from button: NSStatusBarButton) {
         let window = window ?? makeWindow()
         self.window = window
-        applyAppearance(theme)
-
         controller?.view.layoutSubtreeIfNeeded()
         position(window, under: button)
         window.makeKeyAndOrderFront(nil)
@@ -109,14 +74,6 @@ final class PanelController {
         removeMonitors()
         window?.orderOut(nil)
         onClose?()
-    }
-
-    /// Only the window-level appearance needs updating on a theme change; the
-    /// SwiftUI tree redraws itself.
-    func applyAppearance(_ theme: Theme) {
-        window?.appearance = theme.appearance == .fixedDark
-            ? NSAppearance(named: .darkAqua)
-            : nil
     }
 
     // MARK: - Plumbing

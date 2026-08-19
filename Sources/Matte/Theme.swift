@@ -1,136 +1,73 @@
 import AppKit
 import SwiftUI
 
-/// Visual tokens for the panel. Every custom control reads these rather than
-/// hard-coding colour or metrics, so a theme swap is a data change.
-struct Theme: Identifiable, Equatable {
-    enum Appearance: Equatable { case fixedDark, followsSystem }
-    enum Backdrop: Equatable {
-        case vibrancy(NSVisualEffectView.Material)
-        case solid
-    }
+/// Visual tokens, taken from the Paper design. One theme now — the struct stays
+/// so a second is a data change rather than a refactor.
+struct Theme {
+    static let current = Theme()
 
-    let id: String
-    let name: String
-    let blurb: String
+    // Panel
+    let width: CGFloat = 554
+    let panelRadius: CGFloat = 12
+    let panelFill = Color(hex: 0x232427)
+    let divider = Color(hex: 0x2E3033)
+    let hairline = Color.white.opacity(0.10)
 
-    let appearance: Appearance
-    let backdrop: Backdrop
+    // Header
+    let headerPadding: CGFloat = 16
+    let tileGap: CGFloat = 24
+    let tileWidth: CGFloat = 158
+    let tileHeight: CGFloat = 89
+    let tileRadius: CGFloat = 4
+    let caretSize: CGFloat = 12
+    let caretFill = Color(hex: 0x1F2022)
 
-    // Metrics
-    let panelRadius: CGFloat
-    let controlRadius: CGFloat
-    let panelPadding: CGFloat
-    let sectionSpacing: CGFloat
-    let rowHeight: CGFloat
+    // Sections
+    let settingsFill = Color.black
+    let footerFill = Color(hex: 0x1F2022)
 
-    // Surfaces
-    let controlFill: Color
-    let controlFillActive: Color
-    let trackFill: Color
-    let border: Color
-    let dividerColor: Color
-    /// Flat themes draw borders instead of fills.
-    let prefersBorders: Bool
+    // Fields
+    let fieldFill = Color(hex: 0x262626)
+    let fieldBorder = Color(hex: 0x525252)
+    let fieldRadius: CGFloat = 10
+    let fieldHeight: CGFloat = 32
+
+    // Slider
+    let trackFill = Color(hex: 0x5A5E66)
+    let trackActive = Color(hex: 0xEBEBEB)
+    let knobFill = Color(hex: 0xEBEBEB)
+    let knobSize: CGFloat = 20
+    let trackHeight: CGFloat = 4
+
+    // Buttons
+    let buttonRadius: CGFloat = 8
+    let buttonHeight: CGFloat = 28
+    let ghostFill = Color(hex: 0x2A2B2E)
+    let accent = Color(hex: 0x3D9AFF)
+    let iconButtonActive = Color.white.opacity(0.10)
 
     // Text
-    let textPrimary: Color
-    let textSecondary: Color
-    let titleFont: Font
-    let labelFont: Font
-    let numeralFont: Font
+    let textPrimary = Color(hex: 0xFAFAFA)
+    let textDisplayName = Color.white
+    let textSecondary = Color(hex: 0xA3A3A3)
+    let textLabel = Color(hex: 0x6C6F75)
+    let textOnAccent = Color.white
+    let checkFill = Color(hex: 0xEBEBEB)
+    let checkMark = Color(hex: 0x171717)
 
-    var accent: Color { Color(nsColor: .controlAccentColor) }
-
-    static let all: [Theme] = [.darkHUD, .frosted, .flatMono]
-
-    static func named(_ id: String) -> Theme {
-        all.first { $0.id == id } ?? .frosted
+    // The design specifies Figtree, which is not a system font and is not
+    // installed here. SF at the same metrics until it is vendored.
+    func font(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight)
     }
-
-    /// Fixed dark, translucent, high contrast — reads as a pro tool.
-    static let darkHUD = Theme(
-        id: "darkHUD",
-        name: "Dark HUD",
-        blurb: "Fixed dark, translucent, high contrast",
-        appearance: .fixedDark,
-        backdrop: .vibrancy(.hudWindow),
-        panelRadius: 10,
-        controlRadius: 6,
-        panelPadding: 14,
-        sectionSpacing: 12,
-        rowHeight: 26,
-        controlFill: Color.white.opacity(0.07),
-        controlFillActive: Color.white.opacity(0.14),
-        trackFill: Color.white.opacity(0.12),
-        border: Color.white.opacity(0.10),
-        dividerColor: Color.white.opacity(0.08),
-        prefersBorders: false,
-        textPrimary: Color.white,
-        textSecondary: Color.white.opacity(0.55),
-        titleFont: .system(size: 13, weight: .semibold),
-        labelFont: .system(size: 11, weight: .regular),
-        numeralFont: .system(size: 11, weight: .medium, design: .monospaced)
-    )
-
-    /// Follows system light/dark with real vibrancy and soft depth.
-    static let frosted = Theme(
-        id: "frosted",
-        name: "Frosted",
-        blurb: "Adaptive, vibrant, generous",
-        appearance: .followsSystem,
-        backdrop: .vibrancy(.popover),
-        panelRadius: 12,
-        controlRadius: 8,
-        panelPadding: 16,
-        sectionSpacing: 14,
-        rowHeight: 28,
-        controlFill: Color(nsColor: .quaternaryLabelColor).opacity(0.5),
-        controlFillActive: Color(nsColor: .tertiaryLabelColor).opacity(0.5),
-        trackFill: Color(nsColor: .quaternaryLabelColor),
-        border: Color(nsColor: .separatorColor),
-        dividerColor: Color(nsColor: .separatorColor),
-        prefersBorders: false,
-        textPrimary: Color(nsColor: .labelColor),
-        textSecondary: Color(nsColor: .secondaryLabelColor),
-        titleFont: .system(size: 13, weight: .semibold, design: .rounded),
-        labelFont: .system(size: 11, weight: .regular, design: .rounded),
-        numeralFont: .system(size: 11, weight: .medium, design: .rounded).monospacedDigit()
-    )
-
-    /// Near-flat, hairline borders, colour reserved for the active state.
-    static let flatMono = Theme(
-        id: "flatMono",
-        name: "Flat",
-        blurb: "Flat, hairline, dense",
-        appearance: .followsSystem,
-        backdrop: .solid,
-        panelRadius: 8,
-        controlRadius: 4,
-        panelPadding: 12,
-        sectionSpacing: 10,
-        rowHeight: 24,
-        controlFill: .clear,
-        controlFillActive: Color(nsColor: .quaternaryLabelColor).opacity(0.4),
-        trackFill: Color(nsColor: .quaternaryLabelColor).opacity(0.6),
-        border: Color(nsColor: .separatorColor),
-        dividerColor: Color(nsColor: .separatorColor),
-        prefersBorders: true,
-        textPrimary: Color(nsColor: .labelColor),
-        textSecondary: Color(nsColor: .secondaryLabelColor),
-        titleFont: .system(size: 12, weight: .semibold),
-        labelFont: .system(size: 11, weight: .regular),
-        numeralFont: .system(size: 11, weight: .regular, design: .monospaced)
-    )
 }
 
-private struct ThemeKey: EnvironmentKey {
-    static let defaultValue: Theme = .frosted
-}
-
-extension EnvironmentValues {
-    var theme: Theme {
-        get { self[ThemeKey.self] }
-        set { self[ThemeKey.self] = newValue }
+extension Color {
+    init(hex: UInt32, opacity: Double = 1) {
+        self.init(.sRGB,
+                  red: Double((hex >> 16) & 0xFF) / 255,
+                  green: Double((hex >> 8) & 0xFF) / 255,
+                  blue: Double(hex & 0xFF) / 255,
+                  opacity: opacity)
     }
 }

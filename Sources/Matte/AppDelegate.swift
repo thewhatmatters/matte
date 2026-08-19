@@ -1,11 +1,9 @@
 import AppKit
-import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let panel = PanelController()
-    private var themeObserver: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -19,13 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LoginItem.refreshIfMoved()
         refreshIcon()
 
-        // Switching theme while the panel is open restyles it in place.
-        themeObserver = Settings.shared.$themeID
-            .removeDuplicates()
-            .dropFirst()
-            .sink { [weak self] id in
-                self?.panel.applyAppearance(Theme.named(id))
-            }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -55,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             OverlayController.shared.hide()
             self?.refreshIcon()
         }
-        panel.toggle(from: sender, theme: Settings.shared.theme)
+        panel.toggle(from: sender)
         if panel.isVisible { OverlayController.shared.flash() }
     }
 

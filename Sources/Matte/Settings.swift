@@ -34,6 +34,8 @@ struct EdgePadding: Codable, Equatable {
     enum Edge: String, CaseIterable, Identifiable {
         case top, bottom, left, right
         var id: String { rawValue }
+        /// Reading order for the four-up field row, matching CSS shorthand.
+        static let displayOrder: [Edge] = [.top, .right, .bottom, .left]
         var label: String { rawValue.capitalized }
         var symbol: String {
             switch self {
@@ -82,8 +84,8 @@ final class Settings: ObservableObject {
     /// recognises its own full windows afterwards: a window still sitting on a
     /// rect we previously applied is one we sized, and should be re-fitted.
     @Published var appliedRects: [String: [[Double]]] { didSet { persist(appliedRects, Key.appliedRects) } }
-    /// Which visual theme the panel renders in.
-    @Published var themeID: String { didSet { defaults.set(themeID, forKey: Key.theme) } }
+    /// Whether the expandable settings section is showing.
+    @Published var showSettingsSection: Bool { didSet { defaults.set(showSettingsSection, forKey: Key.settingsSection) } }
     /// Whether the popover shows one slider for all edges or a field per edge.
     @Published var editEdgesIndividually: Bool { didSet { defaults.set(editEdgesIndividually, forKey: Key.individualEdges) } }
     /// Apps the engine never touches. Escape hatch for anything that fights back.
@@ -101,7 +103,7 @@ final class Settings: ObservableObject {
         static let globalPadding = "globalPadding"
         static let overrides = "displayOverrides"
         static let appliedRects = "appliedRects"
-        static let theme = "themeID"
+        static let settingsSection = "showSettingsSection"
         static let individualEdges = "editEdgesIndividually"
         static let excluded = "excludedBundleIDs"
         static let didFirstRun = "didFirstRun"
@@ -113,7 +115,7 @@ final class Settings: ObservableObject {
         windowScope = WindowScope(rawValue: defaults.string(forKey: Key.windowScope) ?? "") ?? .largeWindows
         showOverlayOnChange = defaults.bool(forKey: Key.overlay)
         appliedRects = Self.decode(defaults.data(forKey: Key.appliedRects)) ?? [:]
-        themeID = defaults.string(forKey: Key.theme) ?? Theme.frosted.id
+        showSettingsSection = defaults.bool(forKey: Key.settingsSection)
         editEdgesIndividually = defaults.bool(forKey: Key.individualEdges)
         excludedBundleIDs = defaults.stringArray(forKey: Key.excluded) ?? []
         globalPadding = Self.decode(defaults.data(forKey: Key.globalPadding)) ?? .zero
@@ -179,8 +181,6 @@ final class Settings: ObservableObject {
             return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
         }
     }
-
-    var theme: Theme { Theme.named(themeID) }
 
     var hasAnyPadding: Bool {
         !globalPadding.isEmpty || overrides.values.contains { !$0.isEmpty }

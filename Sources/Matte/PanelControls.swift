@@ -1,63 +1,41 @@
 import SwiftUI
 
+private let theme = Theme.current
+
 // MARK: - Slider
 
-/// SwiftUI's Slider has no style protocol, so a themed slider has to be built
-/// from a track, a fill, a knob and a drag gesture. Accessibility is not free
-/// here — hence the explicit value and adjustable action.
+/// SwiftUI's Slider has no style protocol, so a themed slider is a track, a
+/// fill, a knob and a drag gesture. Accessibility is not free here.
 struct PanelSlider: View {
-    @Environment(\.theme) private var theme
     @Binding var value: Double
     var range: ClosedRange<Double>
     var label: String
 
-    @State private var isDragging = false
-
-    private let knobSize: CGFloat = 13
-    private let trackHeight: CGFloat = 4
-
     var body: some View {
         GeometryReader { proxy in
-            let usable = max(proxy.size.width - knobSize, 1)
-            let fraction = normalized
-            let knobX = usable * fraction
+            let usable = max(proxy.size.width - theme.knobSize, 1)
+            let x = usable * fraction
 
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(theme.trackFill)
-                    .frame(height: trackHeight)
-                    .overlay(
-                        theme.prefersBorders
-                            ? Capsule().stroke(theme.border, lineWidth: 1) : nil
-                    )
-
-                Capsule()
-                    .fill(theme.accent)
-                    .frame(width: knobX + knobSize / 2, height: trackHeight)
-
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: knobSize, height: knobSize)
-                    .overlay(Circle().stroke(Color.black.opacity(0.16), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(isDragging ? 0.28 : 0.16),
-                            radius: isDragging ? 3 : 1.5, y: 0.5)
-                    .offset(x: knobX)
-                    .animation(.interactiveSpring(duration: 0.18), value: isDragging)
+                Capsule().fill(theme.trackFill)
+                    .frame(height: theme.trackHeight)
+                Capsule().fill(theme.trackActive)
+                    .frame(width: x + theme.knobSize / 2, height: theme.trackHeight)
+                Circle().fill(theme.knobFill)
+                    .frame(width: theme.knobSize, height: theme.knobSize)
+                    .offset(x: x)
             }
-            .frame(height: max(knobSize, trackHeight))
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        isDragging = true
-                        let x = min(max(drag.location.x - knobSize / 2, 0), usable)
-                        value = denormalized(x / usable)
-                    }
-                    .onEnded { _ in isDragging = false }
+                DragGesture(minimumDistance: 0).onChanged { drag in
+                    let position = min(max(drag.location.x - theme.knobSize / 2, 0), usable)
+                    value = (range.lowerBound + (position / usable)
+                             * (range.upperBound - range.lowerBound)).rounded()
+                }
             )
         }
-        .frame(height: 18)
+        .frame(height: theme.knobSize)
         .accessibilityElement()
         .accessibilityLabel(label)
         .accessibilityValue("\(Int(value)) points")
@@ -70,203 +48,202 @@ struct PanelSlider: View {
         }
     }
 
-    private var normalized: Double {
+    private var fraction: Double {
         let span = range.upperBound - range.lowerBound
         guard span > 0 else { return 0 }
         return min(max((value - range.lowerBound) / span, 0), 1)
-    }
-
-    private func denormalized(_ fraction: Double) -> Double {
-        (range.lowerBound + fraction * (range.upperBound - range.lowerBound)).rounded()
     }
 }
 
 // MARK: - Number field
 
-/// TextField can't be restyled (TextFieldStyle has no usable requirement), so
+/// TextField can't be restyled — TextFieldStyle has no usable requirement — so
 /// this strips it to `.plain` and draws the surface underneath.
 struct PanelNumberField: View {
-    @Environment(\.theme) private var theme
     @Binding var value: Double
-    var width: CGFloat = 52
-    var alignment: TextAlignment = .center
+    /// nil means "share the row equally" — used by the four-up edge row.
+    var width: CGFloat? = 48
+    var edge: EdgePadding.Edge?
 
     var body: some View {
-        TextField("", value: $value, format: .number.precision(.fractionLength(0)))
-            .textFieldStyle(.plain)
-            .multilineTextAlignment(alignment)
-            .font(theme.numeralFont)
-            .foregroundStyle(theme.textPrimary)
-            .padding(.horizontal, 6)
-            .frame(width: width, height: theme.rowHeight - 4)
-            .background(
-                RoundedRectangle(cornerRadius: theme.controlRadius)
-                    .fill(theme.prefersBorders ? Color.clear : theme.controlFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: theme.controlRadius)
-                            .stroke(theme.border, lineWidth: 1)
-                    )
-            )
+        HStack(spacing: 4) {
+            if let edge {
+                EdgeGlyph(edge: edge).frame(width: 24, height: 24)
+            }
+            TextField("", value: $value, format: .number.precision(.fractionLength(0)))
+                .textFieldStyle(.plain)
+                .font(theme.font(14))
+                .foregroundStyle(theme.textPrimary)
+                .accessibilityLabel(edge?.label ?? "Padding")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .frame(width: width, height: theme.fieldHeight)
+        .frame(maxWidth: width == nil ? .infinity : nil)
     }
 }
 
-// MARK: - Segmented control
-
-struct PanelSegmented<T: Hashable>: View {
-    @Environment(\.theme) private var theme
-    @Binding var selection: T
-    var options: [(value: T, label: String)]
+/// The design's 12×12 bracket glyph: four corner brackets at 10%, with the
+/// edge this field controls drawn through at full strength. The mock lit a
+/// corner; an edge is what the number actually does.
+struct EdgeGlyph: View {
+    let edge: EdgePadding.Edge
 
     var body: some View {
-        HStack(spacing: theme.prefersBorders ? 0 : 2) {
-            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                let isSelected = option.value == selection
-                Button {
-                    selection = option.value
-                } label: {
-                    Text(option.label)
-                        .font(theme.labelFont)
-                        .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: theme.rowHeight - 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: theme.controlRadius - 1)
-                                .fill(isSelected ? theme.controlFillActive : .clear)
-                        )
-                        .contentShape(Rectangle())
+        Canvas { context, size in
+            let s = size.width / 12
+            func stroke(_ points: [CGPoint], opacity: Double, width: CGFloat) {
+                var path = Path()
+                path.move(to: CGPoint(x: points[0].x * s, y: points[0].y * s))
+                for point in points.dropFirst() {
+                    path.addLine(to: CGPoint(x: point.x * s, y: point.y * s))
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                context.stroke(path, with: .color(.white.opacity(opacity)),
+                               style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+            }
 
-                if theme.prefersBorders, index < options.count - 1 {
-                    Rectangle().fill(theme.border).frame(width: 1, height: theme.rowHeight - 6)
+            // Corner brackets, always present, faint.
+            stroke([CGPoint(x: 1.5, y: 3.5), CGPoint(x: 1.5, y: 2.5), CGPoint(x: 3.5, y: 1.5)], opacity: 0.10, width: 1)
+            stroke([CGPoint(x: 8.5, y: 1.5), CGPoint(x: 10.5, y: 2.5), CGPoint(x: 10.5, y: 3.5)], opacity: 0.10, width: 1)
+            stroke([CGPoint(x: 10.5, y: 8.5), CGPoint(x: 10.5, y: 10.5), CGPoint(x: 8.5, y: 10.5)], opacity: 0.10, width: 1)
+            stroke([CGPoint(x: 3.5, y: 10.5), CGPoint(x: 1.5, y: 10.5), CGPoint(x: 1.5, y: 8.5)], opacity: 0.10, width: 1)
+
+            // The live edge.
+            switch edge {
+            case .top:    stroke([CGPoint(x: 2.5, y: 1.5), CGPoint(x: 9.5, y: 1.5)], opacity: 1, width: 1.5)
+            case .right:  stroke([CGPoint(x: 10.5, y: 2.5), CGPoint(x: 10.5, y: 9.5)], opacity: 1, width: 1.5)
+            case .bottom: stroke([CGPoint(x: 2.5, y: 10.5), CGPoint(x: 9.5, y: 10.5)], opacity: 1, width: 1.5)
+            case .left:   stroke([CGPoint(x: 1.5, y: 2.5), CGPoint(x: 1.5, y: 9.5)], opacity: 1, width: 1.5)
+            }
+        }
+        .frame(width: 12, height: 12)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Four fields sharing one rounded outline, divided by hairlines.
+struct SegmentedFieldRow: View {
+    let binding: (EdgePadding.Edge) -> Binding<Double>
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(EdgePadding.Edge.displayOrder.enumerated()), id: \.element) { index, edge in
+                PanelNumberField(value: binding(edge), width: nil, edge: edge)
+                if index < EdgePadding.Edge.displayOrder.count - 1 {
+                    Rectangle().fill(theme.fieldBorder)
+                        .frame(width: 1, height: theme.fieldHeight)
                 }
             }
         }
-        .padding(theme.prefersBorders ? 0 : 2)
         .background(
-            RoundedRectangle(cornerRadius: theme.controlRadius)
-                .fill(theme.prefersBorders ? Color.clear : theme.controlFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: theme.controlRadius)
-                        .stroke(theme.border, lineWidth: 1)
-                )
+            RoundedRectangle(cornerRadius: theme.fieldRadius).fill(theme.fieldFill)
         )
-    }
-}
-
-// MARK: - Switch
-
-struct PanelSwitchStyle: ToggleStyle {
-    @Environment(\.theme) private var theme
-
-    func makeBody(configuration: Configuration) -> some View {
-        Button {
-            configuration.isOn.toggle()
-        } label: {
-            HStack {
-                configuration.label
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textPrimary)
-                Spacer(minLength: 8)
-                Capsule()
-                    .fill(configuration.isOn ? theme.accent : theme.trackFill)
-                    .frame(width: 30, height: 17)
-                    .overlay(
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 13, height: 13)
-                            .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
-                            .offset(x: configuration.isOn ? 6.5 : -6.5)
-                    )
-                    .animation(.spring(duration: 0.22), value: configuration.isOn)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityRepresentation {
-            Toggle(isOn: configuration.$isOn) { configuration.label }
-        }
-    }
-}
-
-/// A compact checkbox for secondary options, so they don't compete with the
-/// primary enable switch.
-struct PanelCheckboxStyle: ToggleStyle {
-    @Environment(\.theme) private var theme
-
-    func makeBody(configuration: Configuration) -> some View {
-        Button {
-            configuration.isOn.toggle()
-        } label: {
-            HStack(spacing: 7) {
-                RoundedRectangle(cornerRadius: 3.5)
-                    .fill(configuration.isOn ? theme.accent : Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 3.5)
-                            .stroke(configuration.isOn ? theme.accent : theme.border, lineWidth: 1)
-                    )
-                    .overlay(
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                            .opacity(configuration.isOn ? 1 : 0)
-                    )
-                    .frame(width: 13, height: 13)
-                configuration.label
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityRepresentation {
-            Toggle(isOn: configuration.$isOn) { configuration.label }
-        }
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.fieldRadius).stroke(theme.fieldBorder, lineWidth: 1)
+        )
     }
 }
 
 // MARK: - Buttons
 
-struct PanelButtonStyle: ButtonStyle {
-    @Environment(\.theme) private var theme
-    var prominent: Bool = false
-
+struct GhostButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(theme.labelFont)
-            .foregroundStyle(prominent ? Color.white : theme.textPrimary)
-            .padding(.horizontal, 10)
-            .frame(height: theme.rowHeight - 4)
-            .background(
-                RoundedRectangle(cornerRadius: theme.controlRadius)
-                    .fill(prominent ? theme.accent
-                          : (theme.prefersBorders ? Color.clear : theme.controlFill))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: theme.controlRadius)
-                            .stroke(prominent ? .clear : theme.border, lineWidth: 1)
-                    )
-            )
-            .opacity(configuration.isPressed ? 0.65 : 1)
+            .font(theme.font(13))
+            .foregroundStyle(theme.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: theme.buttonHeight)
+            .background(RoundedRectangle(cornerRadius: theme.buttonRadius).fill(theme.ghostFill))
+            .overlay(RoundedRectangle(cornerRadius: theme.buttonRadius)
+                .stroke(theme.hairline, lineWidth: 1))
+            .shadow(color: .black.opacity(0.30), radius: 1, y: 1)
+            .opacity(configuration.isPressed ? 0.7 : 1)
             .contentShape(Rectangle())
     }
 }
 
-/// A small square icon button (the per-edge expander).
-struct PanelIconButtonStyle: ButtonStyle {
-    @Environment(\.theme) private var theme
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(theme.font(13))
+            .foregroundStyle(theme.textOnAccent)
+            .padding(.horizontal, 12)
+            .frame(height: theme.buttonHeight)
+            .background(RoundedRectangle(cornerRadius: theme.buttonRadius).fill(theme.accent))
+            .overlay(RoundedRectangle(cornerRadius: theme.buttonRadius)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Rectangle())
+    }
+}
+
+/// Small 24×24 icon button; active state is a 10% white fill.
+struct IconButtonStyle: ButtonStyle {
     var isActive: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(isActive ? theme.textPrimary : theme.textSecondary)
-            .frame(width: 22, height: 20)
-            .background(
-                RoundedRectangle(cornerRadius: theme.controlRadius - 1)
-                    .fill(isActive ? theme.controlFillActive : .clear)
-            )
+            .frame(width: 24, height: 24)
+            .background(RoundedRectangle(cornerRadius: 4)
+                .fill(isActive ? theme.iconButtonActive : .clear))
             .opacity(configuration.isPressed ? 0.6 : 1)
             .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Toggles
+
+struct PanelCheckboxStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(configuration.isOn ? theme.checkFill : .clear)
+                    .overlay(RoundedRectangle(cornerRadius: 2)
+                        .stroke(configuration.isOn ? theme.checkFill : theme.fieldBorder, lineWidth: 1))
+                    .overlay {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(theme.checkMark)
+                            .opacity(configuration.isOn ? 1 : 0)
+                    }
+                    .frame(width: 16, height: 16)
+                configuration.label
+                    .font(theme.font(12.5))
+                    .foregroundStyle(theme.textSecondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }
+        }
+    }
+}
+
+struct PanelSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            Capsule()
+                .fill(configuration.isOn ? theme.accent : theme.trackFill)
+                .frame(width: 30, height: 17)
+                .overlay(
+                    Circle().fill(.white).frame(width: 13, height: 13)
+                        .offset(x: configuration.isOn ? 6.5 : -6.5)
+                )
+                .animation(.spring(duration: 0.22), value: configuration.isOn)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }
+        }
     }
 }

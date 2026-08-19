@@ -21,7 +21,11 @@ Rectangle and Loop use.
 | `Sources/Matte/PaddingEngine.swift` | AX observers, periodic sweep, window adjustment, filled-window tracking. |
 | `Sources/Matte/AX.swift` | Accessibility wrapper and the AX↔AppKit coordinate flip. |
 | `Sources/Matte/Settings.swift` | Per-display padding model, applied-rect history, persistence. |
-| `Sources/Matte/SettingsView.swift` | The popover UI. |
+| `Sources/Matte/SettingsView.swift` | The panel UI. |
+| `Sources/Matte/Theme.swift` | Design tokens taken from the Paper file. |
+| `Sources/Matte/PanelWindow.swift` | Borderless NSPanel container, positioning, dismissal. |
+| `Sources/Matte/PanelControls.swift` | Hand-built slider, fields, buttons, toggles. |
+| `Sources/Matte/DisplayStrip.swift` | Display tiles with wallpaper thumbnails. |
 | `Sources/Matte/StatusFile.swift` | Publishes live state to disk for `--status`. |
 | `Sources/Matte/SelfTest.swift` | Geometry assertions run by `--selftest`. |
 | `build.sh` | Build → assemble bundle → sign → optionally install. |
@@ -50,6 +54,11 @@ timeout — an unresponsive app must not stall the main-thread sweep.
 **Run `--selftest` and `--uicheck` before reporting a change as done.** Both are
 headless and take under a second.
 
+**Review UI changes with `--render`.** It writes the panel to PNGs via
+`ImageRenderer`, which is the only way to see the panel without opening it.
+`ImageRenderer` cannot draw AppKit-backed views, so `TextField`s appear as
+yellow placeholders — that is a render artifact, not a layout bug.
+
 ## Commands
 
 ```bash
@@ -57,7 +66,8 @@ headless and take under a second.
 ./build.sh --install        # also sign, install to /Applications, launch
 
 .build/release/Matte --selftest    # geometry assertions
-.build/release/Matte --uicheck     # popover layout, both padding modes
+.build/release/Matte --uicheck     # panel layout, all four expand states
+.build/release/Matte --render DIR  # render the panel to PNGs to review visually
 
 # Against the installed app:
 "/Applications/Matte.app/Contents/MacOS/Matte" --status

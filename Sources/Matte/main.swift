@@ -6,39 +6,65 @@ if CommandLine.arguments.contains("--selftest") {
 }
 
 if CommandLine.arguments.contains("--uicheck") {
-    // Lays the panel out offscreen in every theme and padding mode, so clipping
-    // and zero-size regressions are caught without opening the UI.
+    // Lays the panel out offscreen in every combination of its two expandable
+    // sections, so clipping and zero-size regressions are caught without opening
+    // the UI.
     _ = NSApplication.shared
     let available = max(320, (NSScreen.main?.visibleFrame.height ?? 900) - 120)
-    let restoreTheme = Settings.shared.themeID
-    let restoreMode = Settings.shared.editEdgesIndividually
+    let restoreEdges = Settings.shared.editEdgesIndividually
+    let restoreSettings = Settings.shared.showSettingsSection
     var failures = 0
 
-    print("available height: \(Int(available))pt\n")
-    for theme in Theme.all {
-        Settings.shared.themeID = theme.id
-        for individual in [false, true] {
-            Settings.shared.editEdgesIndividually = individual
+    print("displays: \(NSScreen.screens.count)   available height: \(Int(available))pt\n")
+    for perEdge in [false, true] {
+        for showSettings in [false, true] {
+            Settings.shared.editEdgesIndividually = perEdge
+            Settings.shared.showSettingsSection = showSettings
             let controller = NSHostingController(rootView: PanelRoot())
             controller.sizingOptions = [.preferredContentSize]
             controller.view.layoutSubtreeIfNeeded()
             let size = controller.view.fittingSize
             let ok = size.width > 0 && size.height > 0 && size.height <= available
             if !ok { failures += 1 }
-            print(String(format: "  %-10@ %-14@ %3.0f x %3.0f  %@",
-                         theme.name as NSString,
-                         (individual ? "per-edge" : "single slider") as NSString,
-                         size.width, size.height,
-                         ok ? "PASS" : "FAIL (zero size or taller than screen)"))
+            print(String(format: "  %-14@ %-16@ %3.0f x %3.0f  %@",
+                         (perEdge ? "per-edge" : "single slider") as NSString,
+                         (showSettings ? "settings open" : "settings closed") as NSString,
+                         size.width, size.height, ok ? "PASS" : "FAIL"))
         }
     }
 
-    Settings.shared.themeID = restoreTheme
-    Settings.shared.editEdgesIndividually = restoreMode
-    print(failures == 0
-          ? "\nPASS — \(Theme.all.count * 2) layouts fit within the screen"
-          : "\nFAIL — \(failures) layout(s) bad")
+    Settings.shared.editEdgesIndividually = restoreEdges
+    Settings.shared.showSettingsSection = restoreSettings
+    print(failures == 0 ? "\nPASS — 4 layouts fit within the screen" : "\nFAIL — \(failures) bad")
     exit(failures == 0 ? 0 : 1)
+}
+
+if let index = CommandLine.arguments.firstIndex(of: "--render"),
+   let directory = CommandLine.arguments.dropFirst(index + 1).first {
+    // Renders the panel offscreen to PNGs. Design work has to be looked at, and
+    // the panel can't be screenshotted from a terminal.
+    _ = NSApplication.shared
+    MainActor.assumeIsolated {
+    for (perEdge, showSettings) in [(false, false), (true, true)] {
+        Settings.shared.editEdgesIndividually = perEdge
+        Settings.shared.showSettingsSection = showSettings
+
+        let renderer = ImageRenderer(content: PanelRoot().frame(width: 554))
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else {
+            print("render failed for perEdge=\(perEdge)")
+            continue
+        }
+        let name = perEdge ? "panel-expanded.png" : "panel-default.png"
+        let url = URL(fileURLWithPath: directory).appendingPathComponent(name)
+        try? data.write(to: url)
+        print("wrote \(url.lastPathComponent)  \(Int(image.size.width))x\(Int(image.size.height))")
+    }
+    }
+    exit(0)
 }
 
 if CommandLine.arguments.contains("--status") {
