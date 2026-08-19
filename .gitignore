@@ -1,0 +1,7 @@
+.build/
+build/
+.swiftpm/
+.DS_Store
+
+# Ephemeral session state, not project config.
+.claude/current-task.txt
