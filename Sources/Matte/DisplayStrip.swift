@@ -88,33 +88,40 @@ struct DisplayStrip: View {
         return DeviceChrome(kind: DeviceKind.kind(for: screen),
                             aspect: screen.frame.width / max(screen.frame.height, 1),
                             screenWidth: theme.deviceWidth) {
-            ZStack {
-                if let wallpaper = Wallpaper.image(for: screen) {
-                    Image(nsImage: wallpaper).resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    Color.black
-                }
-                // The reserved margin is dimmed rather than outlined — an
-                // outline here is indistinguishable from the selection ring.
-                GeometryReader { proxy in
-                    let inset = Self.previewInset(padding, in: proxy.size, screen: screen.frame.size)
-                    ZStack {
-                        Rectangle()
-                            .fill(Color.black.opacity(0.62))
-                            .mask {
-                                Rectangle()
-                                    .overlay {
-                                        Rectangle().padding(inset).blendMode(.destinationOut)
-                                    }
-                                    .compositingGroup()
-                            }
-                        Rectangle()
-                            .strokeBorder(Color.white.opacity(0.75), lineWidth: 0.75)
-                            .padding(inset)
+            // Color.clear fixes the layout size; a `.fill` image inside a
+            // ZStack inflates it, which pushed the margin rectangle's top and
+            // bottom edges outside the clip so only its sides were visible.
+            Color.clear
+                .overlay {
+                    if let wallpaper = Wallpaper.image(for: screen) {
+                        Image(nsImage: wallpaper).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.black
                     }
-                    .opacity(padding.isEmpty ? 0 : 1)
                 }
-            }
+                .clipped()
+                .overlay {
+                    GeometryReader { proxy in
+                        let inset = Self.previewInset(padding, in: proxy.size, screen: screen.frame.size)
+                        ZStack {
+                            // The reserved margin is dimmed rather than outlined —
+                            // an outline is indistinguishable from the selection ring.
+                            Rectangle()
+                                .fill(Color.black.opacity(0.62))
+                                .mask {
+                                    Rectangle()
+                                        .overlay {
+                                            Rectangle().padding(inset).blendMode(.destinationOut)
+                                        }
+                                        .compositingGroup()
+                                }
+                            Rectangle()
+                                .strokeBorder(Color.white.opacity(0.75), lineWidth: 0.75)
+                                .padding(inset)
+                        }
+                        .opacity(padding.isEmpty ? 0 : 1)
+                    }
+                }
         }
         .saturation(isSelected ? 1 : 0.85)
         .overlay(alignment: .top) {
