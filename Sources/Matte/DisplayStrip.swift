@@ -26,6 +26,20 @@ struct DisplayStrip: View {
     /// Drawn inside each thumbnail so the numbers below have a visible meaning.
     let paddingFor: (NSScreen) -> EdgePadding
 
+    /// A thumbnail is roughly 4% of the real screen, so a realistic padding
+    /// scales to under 3pt. Non-zero edges are floored at 1.5pt so "there is
+    /// padding here" stays legible; above that the proportions are to scale.
+    private static func previewInset(_ padding: EdgePadding,
+                                     in size: CGSize, screen: CGSize) -> EdgeInsets {
+        func band(_ value: Double, _ extent: CGFloat, _ screenExtent: CGFloat) -> CGFloat {
+            value > 0 ? max(value * extent / max(screenExtent, 1), 1.5) : 0
+        }
+        return EdgeInsets(top: band(padding.top, size.height, screen.height),
+                          leading: band(padding.left, size.width, screen.width),
+                          bottom: band(padding.bottom, size.height, screen.height),
+                          trailing: band(padding.right, size.width, screen.width))
+    }
+
     /// Tallest device across the connected screens — every tile reserves this
     /// much so the devices share a floor and the labels share a baseline.
     private var deviceSlotHeight: CGFloat {
@@ -80,26 +94,38 @@ struct DisplayStrip: View {
                 } else {
                     Color.black
                 }
-                // The reserved margin, drawn to scale.
+                // The reserved margin is dimmed rather than outlined — an
+                // outline here is indistinguishable from the selection ring.
                 GeometryReader { proxy in
-                    let scale = proxy.size.width / max(screen.frame.width, 1)
-                    Rectangle()
-                        .strokeBorder(Color.white.opacity(0.85), lineWidth: 1)
-                        .padding(EdgeInsets(top: padding.top * scale,
-                                            leading: padding.left * scale,
-                                            bottom: padding.bottom * scale,
-                                            trailing: padding.right * scale))
-                        .opacity(padding.isEmpty ? 0 : 1)
+                    let inset = Self.previewInset(padding, in: proxy.size, screen: screen.frame.size)
+                    ZStack {
+                        Rectangle()
+                            .fill(Color.black.opacity(0.62))
+                            .mask {
+                                Rectangle()
+                                    .overlay {
+                                        Rectangle().padding(inset).blendMode(.destinationOut)
+                                    }
+                                    .compositingGroup()
+                            }
+                        Rectangle()
+                            .strokeBorder(Color.white.opacity(0.75), lineWidth: 0.75)
+                            .padding(inset)
+                    }
+                    .opacity(padding.isEmpty ? 0 : 1)
                 }
             }
         }
         .saturation(isSelected ? 1 : 0.85)
         .overlay(alignment: .top) {
+            // Selection sits outside the device in the accent colour, the way
+            // System Settings marks the selected display.
             if isSelected {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(theme.accent, lineWidth: 2)
                     .frame(width: theme.deviceWidth,
                            height: (theme.deviceWidth / max(screen.frame.width / screen.frame.height, 0.1)).rounded())
+                    .padding(-3)
             }
         }
     }

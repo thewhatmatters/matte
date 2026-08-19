@@ -67,6 +67,21 @@ if let index = CommandLine.arguments.firstIndex(of: "--render"),
     exit(0)
 }
 
+if let index = CommandLine.arguments.firstIndex(of: "--set-padding"),
+   let value = CommandLine.arguments.dropFirst(index + 1).first.flatMap(Double.init) {
+    // Scriptable uniform padding, on every connected display.
+    _ = NSApplication.shared
+    let clamped = min(max(value, 0), Settings.maxPadding)
+    var padding = EdgePadding.zero
+    EdgePadding.Edge.allCases.forEach { padding[$0] = clamped }
+    for screen in NSScreen.screens {
+        Settings.shared.setPadding(padding, for: screen)
+    }
+    Settings.shared.globalPadding = padding
+    print("Padding set to \(Int(clamped))pt on all edges of \(NSScreen.screens.count) display(s).")
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--status") {
     // Read the running app's published state rather than this process's own
     // Accessibility status — a terminal-launched copy is attributed to the

@@ -76,6 +76,12 @@ yellow placeholders — that is a render artifact, not a layout bug.
 
 ## Gotchas
 
+**Run the CLI flags from the app bundle, not `.build/release`.** A bare
+executable has no `Bundle.main.bundleIdentifier`, so `UserDefaults.standard`
+resolves to a different domain and `--render`, `--status` and `--set-padding`
+silently operate on empty settings. Use
+`./build/Matte.app/Contents/MacOS/Matte` or the installed copy.
+
 **`--status` reads a published state file, not its own permission.** A
 terminal-launched copy of the binary is attributed to the *terminal* by TCC, so
 calling `AXIsProcessTrusted()` there reports the terminal's grant and lies about
