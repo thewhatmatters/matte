@@ -16,7 +16,11 @@ struct Theme {
     // Header
     let headerPadding: CGFloat = 16
     let tileGap: CGFloat = 24
+    /// Column width for a tile — the label needs the full width even though the
+    /// device is drawn smaller.
     let tileWidth: CGFloat = 158
+    /// The device itself is drawn at 80% of the column.
+    var deviceWidth: CGFloat { (tileWidth * 0.8).rounded() }
     let tileHeight: CGFloat = 89
     let tileRadius: CGFloat = 4
     let caretSize: CGFloat = 12

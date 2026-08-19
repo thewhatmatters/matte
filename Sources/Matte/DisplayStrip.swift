@@ -32,7 +32,7 @@ struct DisplayStrip: View {
         screens.map {
             DeviceChrome<EmptyView>.totalHeight(kind: DeviceKind.kind(for: $0),
                                                 aspect: $0.frame.width / max($0.frame.height, 1),
-                                                screenWidth: theme.tileWidth)
+                                                screenWidth: theme.deviceWidth)
         }.max() ?? theme.tileHeight
     }
 
@@ -73,7 +73,7 @@ struct DisplayStrip: View {
         let isSelected = selectedKey == Settings.key(for: screen)
         return DeviceChrome(kind: DeviceKind.kind(for: screen),
                             aspect: screen.frame.width / max(screen.frame.height, 1),
-                            screenWidth: theme.tileWidth) {
+                            screenWidth: theme.deviceWidth) {
             ZStack {
                 if let wallpaper = Wallpaper.image(for: screen) {
                     Image(nsImage: wallpaper).resizable().aspectRatio(contentMode: .fill)
@@ -98,8 +98,8 @@ struct DisplayStrip: View {
             if isSelected {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
-                    .frame(width: theme.tileWidth,
-                           height: (theme.tileWidth / max(screen.frame.width / screen.frame.height, 0.1)).rounded())
+                    .frame(width: theme.deviceWidth,
+                           height: (theme.deviceWidth / max(screen.frame.width / screen.frame.height, 0.1)).rounded())
             }
         }
     }
