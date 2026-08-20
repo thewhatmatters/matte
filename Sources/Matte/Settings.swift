@@ -118,7 +118,23 @@ final class Settings: ObservableObject {
         static let didFirstRun = "didFirstRun"
     }
 
+    /// The identifier before the app was renamed to Matte. UserDefaults is keyed
+    /// on it, so without this every padding value would be lost on upgrade.
+    private static let legacyDomain = "so.whatmatters.displaypadding"
+
+    private static func migrateLegacyDomainIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Key.didFirstRun) == nil,
+              let legacy = defaults.persistentDomain(forName: legacyDomain),
+              !legacy.isEmpty else { return }
+        for (key, value) in legacy where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+        }
+        NSLog("Matte: migrated \(legacy.count) settings from \(legacyDomain)")
+    }
+
     private init() {
+        Self.migrateLegacyDomainIfNeeded()
         defaults.register(defaults: [Key.isEnabled: true])
         isEnabled = defaults.bool(forKey: Key.isEnabled)
         windowScope = WindowScope(rawValue: defaults.string(forKey: Key.windowScope) ?? "") ?? .largeWindows

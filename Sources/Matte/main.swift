@@ -142,7 +142,7 @@ if CommandLine.arguments.contains("--status") {
 }
 
 // One menu bar icon is enough.
-let bundleID = Bundle.main.bundleIdentifier ?? "so.whatmatters.displaypadding"
+let bundleID = Bundle.main.bundleIdentifier ?? "so.whatmatters.matte"
 if NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
     .contains(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
     NSLog("Matte: another instance is already running.")

@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="Matte"
-BUNDLE_ID="so.whatmatters.displaypadding"
+BUNDLE_ID="so.whatmatters.matte"
 EXECUTABLE="Matte"
 VERSION="1.0.0"
 BUILD_DIR="build"
