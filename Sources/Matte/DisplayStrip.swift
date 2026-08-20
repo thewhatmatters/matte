@@ -104,10 +104,12 @@ struct DisplayStrip: View {
                     GeometryReader { proxy in
                         let inset = Self.previewInset(padding, in: proxy.size, screen: screen.frame.size)
                         ZStack {
-                            // The reserved margin is dimmed rather than outlined —
-                            // an outline is indistinguishable from the selection ring.
+                            // Selection is shown by tinting the reserved margin
+                            // itself, so the highlight lands on the thing being
+                            // edited rather than around the whole device.
                             Rectangle()
-                                .fill(Color.black.opacity(0.62))
+                                .fill(isSelected ? theme.accent.opacity(0.60)
+                                                 : Color.black.opacity(0.62))
                                 .mask {
                                     Rectangle()
                                         .overlay {
@@ -116,27 +118,23 @@ struct DisplayStrip: View {
                                         .compositingGroup()
                                 }
                             Rectangle()
-                                .strokeBorder(Color.white.opacity(0.75), lineWidth: 0.75)
+                                .strokeBorder(Color.white.opacity(isSelected ? 0.9 : 0.6),
+                                              lineWidth: 0.75)
                                 .padding(inset)
                         }
                         .opacity(padding.isEmpty ? 0 : 1)
+                        .animation(.easeOut(duration: 0.18), value: isSelected)
+
+                        // With no padding there is no margin to tint, so fall
+                        // back to an inset edge that still reads as selected.
+                        if isSelected && padding.isEmpty {
+                            Rectangle()
+                                .strokeBorder(theme.accent, lineWidth: 1.5)
+                        }
                     }
                 }
         }
-        .saturation(isSelected ? 1 : 0.85)
-        .overlay(alignment: .top) {
-            // Selection sits outside the device in the accent colour, the way
-            // System Settings marks the selected display.
-            if isSelected {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(theme.accent, lineWidth: 2)
-                    .frame(width: theme.deviceWidth,
-                           height: (theme.deviceWidth / max(screen.frame.width / screen.frame.height, 0.1)).rounded())
-                    .padding(-3)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            }
-        }
-        .animation(.easeOut(duration: 0.18), value: isSelected)
+        .saturation(isSelected ? 1 : 0.9)
     }
 
     /// One Mac, so the display's own name leads; the role goes underneath.
