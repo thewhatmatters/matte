@@ -82,3 +82,7 @@ plus any windows currently outside it. `--selftest` runs the geometry assertions
 - Some apps (notably ones with hard minimum window sizes, and Electron apps that
   manage their own geometry) may resist. Use *Apply Now*, or leave them out via
   the `excludedBundleIDs` preference.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

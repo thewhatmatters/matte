@@ -54,7 +54,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>ATSApplicationFontsPath</key><string>Fonts</string>
-    <key>NSHumanReadableCopyright</key><string>MIT Licensed</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 WhatMatters. MIT Licensed.</string>
 </dict>
 </plist>
 PLIST
