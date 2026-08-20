@@ -1,11 +1,21 @@
 import SwiftUI
 
+/// Natural height of the settings section, measured while it is collapsed so
+/// the reveal has a concrete value to animate towards.
+private struct SectionHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject private var settings = Settings.shared
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var screens: [NSScreen] = NSScreen.screens
     @State private var didFill = false
+    @State private var sectionHeight: CGFloat = 0
     @State private var selectedKey: String = Settings.shared.initialEditingTarget()
         ?? Settings.key(for: NSScreen.main ?? NSScreen.screens[0])
 
@@ -16,14 +26,19 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             header
             paddingSection
-            if settings.showSettingsSection {
-                settingsSection
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            settingsSection
+                .fixedSize(horizontal: false, vertical: true)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: SectionHeightKey.self, value: proxy.size.height)
+                })
+                .frame(height: settings.showSettingsSection ? sectionHeight : 0, alignment: .top)
+                .clipped()
+                .opacity(settings.showSettingsSection ? 1 : 0)
             footer
         }
         .frame(width: theme.width)
         .background(theme.panelFill)
+        .onPreferenceChange(SectionHeightKey.self) { sectionHeight = $0 }
         .animation(.easeOut(duration: 0.18), value: hasChanges)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedKey)
         .onReceive(ticker) { _ in tick() }

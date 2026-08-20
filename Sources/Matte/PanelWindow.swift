@@ -107,8 +107,11 @@ final class PanelController {
         window.contentViewController = controller
         self.controller = controller
 
+        // queue: nil delivers synchronously on the posting thread. Hopping to
+        // the main queue would land the origin correction a frame late, and the
+        // top edge visibly wobbles for the length of the resize animation.
         resizeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification, object: window, queue: .main
+            forName: NSWindow.didResizeNotification, object: window, queue: nil
         ) { [weak self] _ in
             self?.pinTopEdge()
         }
@@ -123,7 +126,9 @@ final class PanelController {
         let desired = anchorTopY - frame.height
         guard abs(frame.origin.y - desired) > 0.5 else { return }
         frame.origin.y = desired
-        window.setFrame(frame, display: true, animate: false)
+        // display: false — the resize that triggered this already scheduled a
+        // redraw, and forcing a second one mid-animation causes tearing.
+        window.setFrame(frame, display: false, animate: false)
     }
 
     private func position(_ window: PanelWindow, under button: NSStatusBarButton) {
