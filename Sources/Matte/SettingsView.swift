@@ -26,14 +26,18 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             header
             paddingSection
+            // Bottom alignment is what makes this read as a slide. Anchored to
+            // the top, a growing clip reveals the section from its first row
+            // down — a wipe. Anchored to the bottom, the section sits above the
+            // clip and travels down into view as the window grows, so the rest
+            // of the panel stays put and only this drawer moves.
             settingsSection
                 .fixedSize(horizontal: false, vertical: true)
                 .background(GeometryReader { proxy in
                     Color.clear.preference(key: SectionHeightKey.self, value: proxy.size.height)
                 })
-                .frame(height: settings.showSettingsSection ? sectionHeight : 0, alignment: .top)
+                .frame(height: settings.showSettingsSection ? sectionHeight : 0, alignment: .bottom)
                 .clipped()
-                .opacity(settings.showSettingsSection ? 1 : 0)
             footer
         }
         .frame(width: theme.width)
@@ -199,7 +203,9 @@ struct SettingsView: View {
     private var footer: some View {
         HStack(spacing: 12) {
             Button("Settings") {
-                withAnimation(.easeOut(duration: 0.22)) {
+                // Critically damped: a drawer that overshoots would drag the
+                // window's height past its target and snap back.
+                withAnimation(.spring(response: 0.30, dampingFraction: 1.0)) {
                     settings.showSettingsSection.toggle()
                 }
             }
