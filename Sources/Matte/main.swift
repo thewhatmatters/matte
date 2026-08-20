@@ -80,6 +80,19 @@ if let index = CommandLine.arguments.firstIndex(of: "--render"),
         try? data.write(to: url)
         print("wrote \(url.lastPathComponent)  \(Int(image.size.width))x\(Int(image.size.height))")
     }
+
+    // A third image over grey: shadow clipping is invisible against a dark
+    // backdrop, which is how it shipped unnoticed.
+    let shadowRenderer = ImageRenderer(content: PanelRoot().background(Color(white: 0.55)))
+    shadowRenderer.scale = 2
+    if let image = shadowRenderer.nsImage,
+       let tiff = image.tiffRepresentation,
+       let rep = NSBitmapImageRep(data: tiff),
+       let data = rep.representation(using: .png, properties: [:]) {
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("panel-shadow.png")
+        try? data.write(to: url)
+        print("wrote panel-shadow.png  \(Int(image.size.width))x\(Int(image.size.height))")
+    }
     }
     exit(0)
 }

@@ -13,7 +13,10 @@ struct Theme {
     /// larger than the panel, so the shadow is drawn in SwiftUI — an AppKit
     /// window shadow is computed from the content's alpha and would go stale
     /// the moment the drawer moves.
-    let shadowPad: CGFloat = 22
+    /// A SwiftUI shadow spreads well past its nominal radius, so this has to be
+    /// roughly 3× it — at 22 the falloff hit the hosting view's edge and the
+    /// shadow ended in a hard rectangle.
+    let shadowPad: CGFloat = 56
     let panelFill = Color(hex: 0x232427)
     let divider = Color(hex: 0x2E3033)
     let hairline = Color.white.opacity(0.10)

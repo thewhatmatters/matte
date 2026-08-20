@@ -107,7 +107,7 @@ struct PanelRoot: View {
     var body: some View {
         VStack(spacing: 0) {
             PanelSurface()
-                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+                .shadow(color: .black.opacity(0.42), radius: 18, y: 10)
             Spacer(minLength: 0)
         }
         .padding(theme.shadowPad)
