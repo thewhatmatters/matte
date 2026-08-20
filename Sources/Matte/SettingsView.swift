@@ -131,8 +131,15 @@ struct SettingsView: View {
                     .transition(.opacity)
             } else {
                 HStack(spacing: 16) {
+                    // Locked while the edges differ: dragging would flatten all
+                    // four to one value, which is the destructive act the
+                    // "Mixed" state exists to avoid. Typing a value still works.
                     PanelSlider(value: uniformBinding, range: 0...Settings.maxPadding,
                                 label: "Padding, all edges")
+                        .disabled(!currentPadding.isUniform)
+                        .help(currentPadding.isUniform
+                              ? "Sets all four edges"
+                              : "Locked while edges differ — type a value, or edit each edge")
                     UniformField(value: currentPadding.isUniform ? currentPadding.top : nil,
                                  commit: setAll)
                         .help(currentPadding.isUniform

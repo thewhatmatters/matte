@@ -11,6 +11,8 @@ struct PanelSlider: View {
     var range: ClosedRange<Double>
     var label: String
     @State private var isDragging = false
+    /// `.disabled` blocks the gesture but won't dim a hand-drawn control.
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         GeometryReader { proxy in
@@ -43,6 +45,7 @@ struct PanelSlider: View {
             )
         }
         .frame(height: theme.knobSize)
+        .opacity(isEnabled ? 1 : 0.35)
         .accessibilityElement()
         .accessibilityLabel(label)
         .accessibilityValue("\(Int(value)) points")
