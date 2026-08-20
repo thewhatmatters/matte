@@ -90,21 +90,45 @@ if [[ "${1:-}" == "--install" ]]; then
   rm -rf "/Applications/$APP_NAME.app"
   cp -R "$APP" "/Applications/$APP_NAME.app"
 
-  if [[ "$STABLE_SIGNATURE" -eq 0 ]]; then
-    # An ad-hoc signature is the binary's hash, so a rebuild invalidates the
-    # grant. macOS leaves the toggle switched on but denies the app, which looks
-    # like a bug — clearing the entry forces an honest prompt instead.
-    echo "==> Clearing the stale Accessibility grant"
-    tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 || true
+  # macOS keys the Accessibility grant to the code signature, so when that
+  # changes the System Settings toggle stays switched on while the app is
+  # silently denied — indistinguishable from an app bug. Track what signed the
+  # last install and clear the entry when it differs, so the prompt is honest.
+  #
+  # A real identity is stable across rebuilds, so key on the Authority alone.
+  # An ad-hoc signature has no identity and TCC falls back to the binary hash,
+  # which changes every build — so key on that and accept the re-grant.
+  # Capture first, then filter: piping codesign straight into grep -m1 makes
+  # grep close the pipe early, and pipefail turns that SIGPIPE into a failure
+  # that set -e treats as fatal.
+  SIGNATURE_INFO="$(codesign -dvvv "/Applications/$APP_NAME.app" 2>&1 || true)"
+  if [[ "$STABLE_SIGNATURE" -eq 1 ]]; then
+    CURRENT_SIGNATURE="$(printf '%s\n' "$SIGNATURE_INFO" | grep "^Authority=" | head -1 || true)"
+  else
+    CURRENT_SIGNATURE="adhoc:$(printf '%s\n' "$SIGNATURE_INFO" | grep "^CDHash=" | head -1 || true)"
   fi
+
+  SIGNATURE_STATE="$HOME/Library/Application Support/$APP_NAME/last-signature"
+  PREVIOUS_SIGNATURE="$(cat "$SIGNATURE_STATE" 2>/dev/null || true)"
+
+  if [[ "$CURRENT_SIGNATURE" != "$PREVIOUS_SIGNATURE" ]]; then
+    [[ -n "$PREVIOUS_SIGNATURE" ]] && echo "==> Signature changed — clearing the stale Accessibility grant"
+    tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 || true
+    NEEDS_GRANT=1
+  else
+    NEEDS_GRANT=0
+  fi
+  mkdir -p "$(dirname "$SIGNATURE_STATE")"
+  printf '%s' "$CURRENT_SIGNATURE" > "$SIGNATURE_STATE"
 
   open "/Applications/$APP_NAME.app"
   echo
   echo "==> Launched. Look for the icon in your menu bar."
-  if [[ "$STABLE_SIGNATURE" -eq 0 ]]; then
-    echo "    Re-grant Accessibility when prompted:"
-    echo "    System Settings > Privacy & Security > Accessibility > Matte"
+  if [[ "$NEEDS_GRANT" -eq 1 ]]; then
+    echo "    Grant Accessibility when prompted:"
+    echo "    System Settings > Privacy & Security > Accessibility > $APP_NAME"
+    echo "    Then verify: \"/Applications/$APP_NAME.app/Contents/MacOS/$EXECUTABLE\" --status"
   else
-    echo "    The Accessibility grant carries across rebuilds with this signature."
+    echo "    The Accessibility grant carried across this rebuild."
   fi
 fi
