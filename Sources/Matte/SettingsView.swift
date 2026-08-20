@@ -58,6 +58,8 @@ struct SettingsView: View {
         DisplayStrip(screens: screens,
                      selectedKey: $selectedKey.animation(.spring(response: 0.32, dampingFraction: 0.86)),
                      paddingFor: { settings.padding(for: $0) })
+            .frame(maxWidth: .infinity)
+            .background(theme.headerFill)
             .overlay(alignment: .bottom) {
                 Rectangle().fill(theme.divider).frame(height: 1)
             }
@@ -132,8 +134,10 @@ struct SettingsView: View {
             if !isTrusted { permissionNote }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.contentFill)
         .overlay(alignment: .top) {
             SelectionCaret(offset: caretOffset)
         }

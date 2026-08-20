@@ -150,24 +150,45 @@ struct DisplayStrip: View {
 }
 
 /// The caret that points from the padding section up at the selected tile.
+///
+/// Drawn as a triangle rather than a rotated square: rotationEffect leaves the
+/// layout size unchanged, so a 45° square's corners fall outside their own
+/// frame and get clipped into a blunt blob.
 struct SelectionCaret: View {
     private let theme = Theme.current
     let offset: CGFloat
 
+    private var size: CGSize { CGSize(width: theme.caretSize, height: theme.caretSize / 2) }
+
     var body: some View {
-        Rectangle()
+        CaretShape()
             .fill(theme.caretFill)
-            .frame(width: theme.caretSize, height: theme.caretSize)
-            .overlay(alignment: .top) {
-                Rectangle().fill(theme.divider).frame(height: 1)
-            }
-            .overlay(alignment: .leading) {
-                Rectangle().fill(theme.divider).frame(width: 1)
-            }
-            .rotationEffect(.degrees(45))
-            .frame(width: theme.caretSize, height: theme.caretSize / 2, alignment: .top)
-            .clipped()
-            .offset(x: offset, y: -theme.caretSize / 2)
+            .overlay(CaretEdges().stroke(theme.divider, lineWidth: 1))
+            .frame(width: size.width, height: size.height)
+            .offset(x: offset, y: -size.height)
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: offset)
+    }
+}
+
+private struct CaretShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// Only the two rising edges are stroked; the base sits flush against the
+/// section it belongs to.
+private struct CaretEdges: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        return path
     }
 }

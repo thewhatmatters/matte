@@ -27,6 +27,10 @@ struct Theme {
     let caretFill = Color(hex: 0x1F2022)
 
     // Sections
+    /// The display strip is black so the caret — which carries the padding
+    /// section's own colour — reads against it.
+    let headerFill = Color.black
+    let contentFill = Color(hex: 0x1F2022)
     let settingsFill = Color.black
     let footerFill = Color(hex: 0x1F2022)
 
