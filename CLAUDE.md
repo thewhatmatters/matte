@@ -103,6 +103,11 @@ this is invisible until someone is handed a binary. `./build.sh --release`
 submits, staples and verifies; credentials live in a keychain profile, never in
 the repo.
 
+**Unarchive release zips with `ditto -x -k`, never `unzip`.** Info-ZIP does not
+preserve the metadata a signed bundle depends on, so an app extracted with
+`unzip` reports "a sealed resource is missing or invalid" even when the build is
+perfectly valid. macOS and Archive Utility both use `ditto`.
+
 **Sign with a real identity, not ad-hoc.** TCC keys an ad-hoc signature to the
 binary hash, so every rebuild silently invalidates the Accessibility grant while
 leaving the System Settings toggle switched *on* — indistinguishable from an app
