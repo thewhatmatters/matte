@@ -19,6 +19,11 @@ final class PaddingEngine {
     /// sweep would just thrash them.
     private var stubbornWindows = Set<WindowKey>()
 
+    /// Windows given a second attempt already. Some apps re-assert their own
+    /// size just after we set one, so a single delayed retry wins where an
+    /// immediate one can't — but only ever one, or it becomes a tug of war.
+    private var retriedWindows = Set<WindowKey>()
+
     /// Windows currently filling the padded area, and the frame we last gave
     /// them. This is what lets a full window *grow* when the padding shrinks —
     /// clamping alone can only ever push inward.
@@ -68,6 +73,7 @@ final class PaddingEngine {
 
     func settingsChanged() {
         stubbornWindows.removeAll()
+        retriedWindows.removeAll()
         fillUndoStack.removeAll()
         restartSweepTimer()
         applyToAllWindows()
@@ -93,6 +99,13 @@ final class PaddingEngine {
     private func paddedRect(for screen: NSScreen) -> CGRect {
         Geometry.paddedRect(frame: screen.frame, visibleFrame: screen.visibleFrame,
                             padding: settings.padding(for: screen))
+    }
+
+    /// Every padded rect this app has applied, on any display — a window that
+    /// still matches one was sized by us, even if it has since been dragged to
+    /// a different screen.
+    private var recordedRectsAcrossScreens: [CGRect] {
+        targetScreens.flatMap { settings.appliedRects(for: $0) }
     }
 
     private func contentBounds(for screen: NSScreen) -> CGRect {
@@ -125,6 +138,7 @@ final class PaddingEngine {
         // Closed windows would otherwise accumulate in both caches forever.
         filledWindows = filledWindows.filter { live.contains($0.key) }
         stubbornWindows.formIntersection(live)
+        retriedWindows.formIntersection(live)
     }
 
     /// Cached per-process element with a short messaging timeout — a hung app
@@ -166,17 +180,29 @@ final class PaddingEngine {
         // padding changes, in either direction.
         if let applied = filledWindows[key] {
             if current.approximatelyEquals(applied, tolerance: 6) {
-                guard !current.approximatelyEquals(padded) else { return false }
+                guard !current.approximatelyEquals(padded),
+                      !stubbornWindows.contains(key) else { return false }
                 return fill(window: window, to: padded, key: key)
             }
-            // The user resized it themselves, so stop tracking it.
+            // Dragged to another display at the same size: still a filled
+            // window, just one that now belongs to a different screen.
+            let previous = self.screen(for: applied).map(Settings.key(for:))
+            if Geometry.keptItsSize(current, wasAt: applied),
+               previous != Settings.key(for: screen) {
+                return fill(window: window, to: padded, key: key)
+            }
+            // Otherwise the user resized it themselves, so stop tracking it.
             filledWindows.removeValue(forKey: key)
         }
 
         // Either it looks full right now, or it is parked on a rect we applied
         // before the last relaunch.
+        // Either it looks full on this screen, or it still carries a size this
+        // app gave it on some screen — the latter catches a window dragged
+        // across displays, whose position tells us nothing.
         if Geometry.fillsScreen(current, bounds: bounds, visibleFrame: screen.visibleFrame)
-            || Geometry.matchesAppliedRect(current, history: settings.appliedRects(for: screen)) {
+            || Geometry.matchesAppliedRect(current, history: recordedRectsAcrossScreens)
+            || Geometry.matchesAppliedSize(current, history: recordedRectsAcrossScreens) {
             guard !current.approximatelyEquals(padded) else {
                 filledWindows[key] = current
                 return false
@@ -225,6 +251,12 @@ final class PaddingEngine {
         isAdjusting = false
         let achieved = AX.frame(window).map(Coordinates.toAppKit) ?? padded
         filledWindows[key] = achieved
+        // Some apps refuse the exact rect — Electron ones commonly land a few
+        // points off. Without this the next sweep sees a mismatch and asks
+        // again, every two seconds, forever.
+        if !achieved.approximatelyEquals(padded, tolerance: 6) {
+            scheduleFillRetry(window: window, padded: padded, key: key)
+        }
         if let screen = screen(for: achieved) {
             settings.recordAppliedRect(achieved, for: screen)
         }
@@ -292,6 +324,25 @@ final class PaddingEngine {
     }
 
     func discardFillUndo() { fillUndoStack = [] }
+
+    private func scheduleFillRetry(window: AXUIElement, padded: CGRect, key: WindowKey) {
+        guard !retriedWindows.contains(key) else {
+            stubbornWindows.insert(key)
+            return
+        }
+        retriedWindows.insert(key)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self, self.settings.isEnabled, !self.isAdjusting else { return }
+            self.isAdjusting = true
+            AX.setFrame(window, Coordinates.toAccessibility(padded))
+            self.isAdjusting = false
+            let settled = AX.frame(window).map(Coordinates.toAppKit) ?? padded
+            self.filledWindows[key] = settled
+            if !settled.approximatelyEquals(padded, tolerance: 6) {
+                self.stubbornWindows.insert(key)
+            }
+        }
+    }
 
     /// Opt-in: size a freshly created window to the padded area. Windows that
     /// open small are left alone — dialogs and palettes report as standard

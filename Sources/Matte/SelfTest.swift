@@ -15,6 +15,7 @@ enum SelfTest {
         paddingIsMeasuredFromTheScreenEdge()
         fullWindowsTrackPaddingChanges()
         fullWindowsAreRecognisedAfterRelaunch()
+        draggingBetweenScreensKeepsAWindowFilled()
         clampingKeepsWindowsInside()
         scopeSelectsTheRightWindows()
         coordinateFlipRoundTrips()
@@ -94,6 +95,48 @@ enum SelfTest {
                "a few points of app rounding still matches")
         expect(!Geometry.matchesAppliedRect(heavy.offsetBy(dx: 40, dy: 0), history: [heavy]),
                "a window nudged well off the rect does not match")
+    }
+
+    /// Dragging a filled window to another display must not read as a resize.
+    private static func draggingBetweenScreensKeepsAWindowFilled() {
+        let onStudio = padded(EdgePadding(top: 64, bottom: 64, left: 64, right: 64))
+        // Same size, new position — the signature of a drag.
+        let dragged = onStudio.offsetBy(dx: 2880, dy: -400)
+        expect(Geometry.keptItsSize(dragged, wasAt: onStudio),
+               "a window at the same size in a new place was dragged, not resized")
+
+        // A genuine resize must still stop the tracking.
+        let resized = CGRect(x: onStudio.minX, y: onStudio.minY,
+                             width: onStudio.width - 300, height: onStudio.height)
+        expect(!Geometry.keptItsSize(resized, wasAt: onStudio),
+               "a width change reads as a resize")
+
+        // Sitting still is neither.
+        expect(!Geometry.keptItsSize(onStudio, wasAt: onStudio),
+               "an unmoved window is not a drag")
+
+        // The dragged window keeps the old screen's size, so it will not look
+        // full on the new one — which is exactly why size alone can't decide.
+        let builtIn = CGRect(x: 2880, y: 0, width: 1800, height: 1169)
+        let builtInBounds = Geometry.contentBounds(frame: builtIn, visibleFrame: builtIn)
+        expect(!Geometry.fillsScreen(CGRect(x: 2912, y: 32, width: 1736, height: 1066),
+                                     bounds: Geometry.contentBounds(frame: studioFrame,
+                                                                    visibleFrame: studioVisible),
+                                     visibleFrame: studioVisible),
+               "a window carrying a smaller screen's size does not read as filling the larger one")
+        expect(builtInBounds.width == 1800, "content bounds span the built-in's full width")
+
+        // A relaunch loses the in-memory map, so recognition falls back to the
+        // recorded sizes — which must ignore position for a dragged window.
+        let builtInPadded = CGRect(x: 2912, y: 32, width: 1736, height: 1066)
+        let strandedOnStudio = CGRect(x: 64, y: 460, width: 1736, height: 1066)
+        expect(!Geometry.matchesAppliedRect(strandedOnStudio, history: [builtInPadded]),
+               "position-sensitive matching misses a dragged window")
+        expect(Geometry.matchesAppliedSize(strandedOnStudio, history: [builtInPadded]),
+               "size-only matching finds it")
+        expect(!Geometry.matchesAppliedSize(CGRect(x: 0, y: 0, width: 900, height: 600),
+                                            history: [builtInPadded]),
+               "an unrelated window still does not match")
     }
 
     private static func clampingKeepsWindowsInside() {

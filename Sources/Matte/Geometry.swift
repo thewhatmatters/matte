@@ -46,6 +46,26 @@ enum Geometry {
         history.contains { rect.approximatelyEquals($0, tolerance: tolerance) }
     }
 
+    /// Same as `matchesAppliedRect` but ignoring position — a window dragged to
+    /// another display keeps the size we gave it while its origin changes
+    /// completely, so position can't be part of the test.
+    static func matchesAppliedSize(_ rect: CGRect, history: [CGRect],
+                                   tolerance: CGFloat = 6) -> Bool {
+        history.contains {
+            abs(rect.width - $0.width) <= tolerance && abs(rect.height - $0.height) <= tolerance
+        }
+    }
+
+    /// A window that kept its size but sits somewhere new was dragged, not
+    /// resized. Combined with a change of display that means it should carry on
+    /// filling — on the new screen's terms.
+    static func keptItsSize(_ current: CGRect, wasAt applied: CGRect,
+                            tolerance: CGFloat = 6) -> Bool {
+        abs(current.width - applied.width) <= tolerance
+            && abs(current.height - applied.height) <= tolerance
+            && !current.approximatelyEquals(applied, tolerance: tolerance)
+    }
+
     static func clamp(_ rect: CGRect, into bounds: CGRect) -> CGRect {
         let width = min(rect.width, bounds.width)
         let height = min(rect.height, bounds.height)
