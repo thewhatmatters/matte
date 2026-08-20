@@ -21,6 +21,7 @@ private struct SectionHeightKey: PreferenceKey {
 struct SettingsView: View {
     @ObservedObject private var settings = Settings.shared
     @ObservedObject private var metrics = PanelMetrics.shared
+    @ObservedObject private var updates = UpdateCheck.shared
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var screens: [NSScreen] = NSScreen.screens
@@ -201,6 +202,8 @@ struct SettingsView: View {
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: launchAtLogin) { LoginItem.set(launchAtLogin) }
+
+            versionRow
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,6 +211,30 @@ struct SettingsView: View {
         .overlay(alignment: .top) {
             Rectangle().fill(theme.divider).frame(height: 1)
         }
+    }
+
+    /// Doubles as the About surface: the version is always shown, and becomes a
+    /// link when a newer release is published.
+    private var versionRow: some View {
+        HStack(spacing: 6) {
+            Text("Matte \(updates.currentVersion)")
+                .font(theme.font(11))
+                .foregroundStyle(theme.textLabel)
+            if let available = updates.availableVersion {
+                Button {
+                    updates.openReleasePage()
+                } label: {
+                    Text("\(available) available")
+                        .font(theme.font(11, .medium))
+                        .foregroundStyle(theme.accent)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
     }
 
     // MARK: - Footer

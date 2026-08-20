@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let panel = PanelController()
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PaddingEngine.shared.start()
         StatusFile.startPublishing()
         LoginItem.refreshIfMoved()
+        UpdateCheck.shared.start()
         refreshIcon()
 
     }
@@ -70,6 +72,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let update = NSMenuItem(
+            title: UpdateCheck.shared.availableVersion.map { "Update to \($0)…" }
+                ?? "Check for Updates…",
+            action: #selector(checkForUpdates), keyEquivalent: "")
+        update.target = self
+        menu.addItem(update)
+
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: "Quit Matte", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -82,6 +93,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func applyNow() {
         PaddingEngine.shared.applyToAllWindows()
         OverlayController.shared.flash()
+    }
+
+    @objc private func checkForUpdates() {
+        if UpdateCheck.shared.availableVersion != nil {
+            UpdateCheck.shared.openReleasePage()
+        } else {
+            UpdateCheck.shared.check()
+            NSWorkspace.shared.open(
+                URL(string: "https://github.com/thewhatmatters/matte/releases/latest")!)
+        }
     }
 
     @objc private func quit() {

@@ -20,6 +20,7 @@ enum SelfTest {
         clampingKeepsWindowsInside()
         scopeSelectsTheRightWindows()
         coordinateFlipRoundTrips()
+        versionComparisonOrdersNumerically()
 
         print(failures == 0
               ? "PASS — \(checks) checks"
@@ -213,6 +214,17 @@ enum SelfTest {
                                        padding: EdgePadding(top: 0, bottom: 90, left: 0, right: 0))
         expect(rect == CGRect(x: 0, y: 90, width: 1800, height: 1040),
                "bottom padding is measured from the screen edge, not from above the Dock")
+    }
+
+    /// A string compare would call 1.9 newer than 1.10.
+    private static func versionComparisonOrdersNumerically() {
+        expect(UpdateCheck.isNewer("1.1.0", than: "1.0.0"), "a higher minor is newer")
+        expect(UpdateCheck.isNewer("1.10.0", than: "1.9.0"), "1.10 beats 1.9")
+        expect(UpdateCheck.isNewer("2.0", than: "1.99.99"), "a higher major wins outright")
+        expect(!UpdateCheck.isNewer("1.0.0", than: "1.0.0"), "the same version is not newer")
+        expect(!UpdateCheck.isNewer("1.0.0", than: "1.0.1"), "an older version is not newer")
+        expect(UpdateCheck.isNewer("1.0.1", than: "1.0"), "a longer version with more detail is newer")
+        expect(!UpdateCheck.isNewer("1.0", than: "1.0.0"), "trailing zeroes are equal, not newer")
     }
 
     private static func padded(_ padding: EdgePadding) -> CGRect {
