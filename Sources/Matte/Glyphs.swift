@@ -76,6 +76,21 @@ enum Glyph {
         }
     }
 
+    /// The padlock shown in the slider knob when the edges differ.
+    static var lockPath: Path {
+        var path = Path()
+        path.addRoundedRect(in: CGRect(x: 1.5, y: 5.5, width: 9, height: 5.5),
+                            cornerSize: CGSize(width: 2, height: 2))
+        path.move(to: CGPoint(x: 3.5, y: 5.5))
+        path.addLine(to: CGPoint(x: 3.5, y: 3.5))
+        // Over the top, not under: in SwiftUI's y-down space this is the
+        // counter-clockwise sweep.
+        path.addArc(center: CGPoint(x: 6, y: 3.5), radius: 2.5,
+                    startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        path.addLine(to: CGPoint(x: 8.5, y: 5.5))
+        return path
+    }
+
     /// The circular-arrow reset mark.
     static var resetPath: Path {
         var path = Path()
@@ -132,6 +147,20 @@ struct EdgeGlyph: View {
             }
             context.stroke(Glyph.edgePath(edge).applying(transform),
                            with: .color(.white), style: style)
+        }
+        .frame(width: 12, height: 12)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Drawn on the slider knob, so it strokes dark against the light fill.
+struct LockGlyph: View {
+    var body: some View {
+        Canvas { context, size in
+            let scale = size.width / 12
+            context.stroke(Glyph.lockPath.applying(CGAffineTransform(scaleX: scale, y: scale)),
+                           with: .color(.black),
+                           style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
         }
         .frame(width: 12, height: 12)
         .accessibilityHidden(true)
