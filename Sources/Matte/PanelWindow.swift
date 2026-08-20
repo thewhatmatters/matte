@@ -5,6 +5,21 @@ import SwiftUI
 /// custom-looking panel means owning the window. A non-activating NSPanel can
 /// still take key focus for text editing without activating the whole app.
 final class PanelWindow: NSPanel {
+    /// Screen Y the panel hangs from. An NSWindow resizes around its bottom-left
+    /// origin, so every height change would otherwise move the top edge — the
+    /// panel appears to jump rather than grow downward. Re-anchoring inside
+    /// `setFrame` makes the correction part of the same operation; doing it
+    /// afterwards from a resize notification is always at least a frame late.
+    var pinnedTopY: CGFloat?
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        var rect = frameRect
+        if let pinnedTopY {
+            rect.origin.y = pinnedTopY - rect.height
+        }
+        super.setFrame(rect, display: flag)
+    }
+
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 554, height: 400),
                    styleMask: [.borderless, .nonactivatingPanel],
@@ -50,9 +65,9 @@ final class PanelController {
     private var controller: NSHostingController<PanelRoot>?
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var resizeObserver: Any?
-    /// Top edge the panel hangs from, so it grows downward when content changes.
-    private var anchorTopY: CGFloat = 0
+    /// Anchor to apply once the entry animation has finished — pinning during
+    /// it would undo the 6pt rise on the first frame.
+    private var pendingTopAnchor: CGFloat = 0
 
     var isVisible: Bool { window?.isVisible ?? false }
     var onClose: (() -> Void)?
@@ -79,6 +94,10 @@ final class PanelController {
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().alphaValue = 1
             window.animator().setFrameOrigin(landed.origin)
+        } completionHandler: { [weak self] in
+            guard let self, let window = self.window, window.isVisible else { return }
+            window.setFrameOrigin(landed.origin)
+            window.pinnedTopY = self.pendingTopAnchor
         }
 
         installMonitors()
@@ -86,6 +105,7 @@ final class PanelController {
 
     func close() {
         removeMonitors()
+        window?.pinnedTopY = nil
         guard let window, window.isVisible else { onClose?(); return }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.10
@@ -107,28 +127,7 @@ final class PanelController {
         window.contentViewController = controller
         self.controller = controller
 
-        // queue: nil delivers synchronously on the posting thread. Hopping to
-        // the main queue would land the origin correction a frame late, and the
-        // top edge visibly wobbles for the length of the resize animation.
-        resizeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification, object: window, queue: nil
-        ) { [weak self] _ in
-            self?.pinTopEdge()
-        }
         return window
-    }
-
-    /// A window grows from its bottom-left origin, which would push the panel up
-    /// through the menu bar. Re-pin the top after every resize.
-    private func pinTopEdge() {
-        guard let window, window.isVisible, anchorTopY > 0 else { return }
-        var frame = window.frame
-        let desired = anchorTopY - frame.height
-        guard abs(frame.origin.y - desired) > 0.5 else { return }
-        frame.origin.y = desired
-        // display: false — the resize that triggered this already scheduled a
-        // redraw, and forcing a second one mid-animation causes tearing.
-        window.setFrame(frame, display: false, animate: false)
     }
 
     private func position(_ window: PanelWindow, under button: NSStatusBarButton) {
@@ -143,8 +142,9 @@ final class PanelController {
         var top = anchor.minY - 6
         if top - size.height < visible.minY + 8 { top = anchor.maxY + 6 + size.height }
 
-        anchorTopY = top.rounded()
+        window.pinnedTopY = nil
         window.setFrameOrigin(NSPoint(x: x.rounded(), y: (top - size.height).rounded()))
+        pendingTopAnchor = top.rounded()
     }
 
     private func installMonitors() {
