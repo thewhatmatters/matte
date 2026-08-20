@@ -39,6 +39,20 @@ if CommandLine.arguments.contains("--uicheck") {
     exit(failures == 0 ? 0 : 1)
 }
 
+if CommandLine.arguments.contains("--flash") {
+    // Shows the padding outline on every display for a few seconds. Drawing it
+    // needs no Accessibility grant, so unlike the panel this is testable from a
+    // terminal.
+    _ = NSApplication.shared
+    NSApp.setActivationPolicy(.accessory)
+    OverlayController.shared.flash(duration: 3)
+    for entry in PaddingEngine.shared.paddedRects() {
+        print("\(entry.screen.localizedName): outlining \(entry.rect.integral)")
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 4) { exit(0) }
+    NSApplication.shared.run()
+}
+
 if let index = CommandLine.arguments.firstIndex(of: "--render"),
    let directory = CommandLine.arguments.dropFirst(index + 1).first {
     // Renders the panel offscreen to PNGs. Design work has to be looked at, and

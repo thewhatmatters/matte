@@ -191,8 +191,6 @@ struct SettingsView: View {
                 .padding(.horizontal, 6)
                 .padding(.bottom, 4)
 
-            Toggle("Show padding outline while adjusting", isOn: $settings.showOverlayOnChange)
-                .toggleStyle(PanelCheckboxStyle())
             // This is the master switch, so the label has to describe the whole
             // behaviour, not sound like one feature among the others.
             Toggle("Keep windows inside the padding", isOn: $settings.isEnabled)

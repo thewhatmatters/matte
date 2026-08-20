@@ -83,7 +83,6 @@ final class Settings: ObservableObject {
 
     @Published var isEnabled: Bool { didSet { defaults.set(isEnabled, forKey: Key.isEnabled) } }
     @Published var windowScope: WindowScope { didSet { defaults.set(windowScope.rawValue, forKey: Key.windowScope) } }
-    @Published var showOverlayOnChange: Bool { didSet { defaults.set(showOverlayOnChange, forKey: Key.overlay) } }
     /// Padded rects this app has applied, per display, most recent first.
     ///
     /// Window identity does not survive a relaunch, so this is how the engine
@@ -109,7 +108,6 @@ final class Settings: ObservableObject {
     private enum Key {
         static let isEnabled = "isEnabled"
         static let windowScope = "windowScope"
-        static let overlay = "showOverlayOnChange"
         static let globalPadding = "globalPadding"
         static let overrides = "displayOverrides"
         static let appliedRects = "appliedRects"
@@ -121,10 +119,9 @@ final class Settings: ObservableObject {
     }
 
     private init() {
-        defaults.register(defaults: [Key.isEnabled: true, Key.overlay: true])
+        defaults.register(defaults: [Key.isEnabled: true])
         isEnabled = defaults.bool(forKey: Key.isEnabled)
         windowScope = WindowScope(rawValue: defaults.string(forKey: Key.windowScope) ?? "") ?? .largeWindows
-        showOverlayOnChange = defaults.bool(forKey: Key.overlay)
         appliedRects = Self.decode(defaults.data(forKey: Key.appliedRects)) ?? [:]
         fillNewWindows = defaults.bool(forKey: Key.fillNew)
         showSettingsSection = defaults.bool(forKey: Key.settingsSection)

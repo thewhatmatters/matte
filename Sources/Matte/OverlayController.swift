@@ -11,7 +11,6 @@ final class OverlayController {
     private init() {}
 
     func flash(duration: TimeInterval = 1.1) {
-        guard Settings.shared.showOverlayOnChange else { return }
         show()
         hideWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in self?.hide() }

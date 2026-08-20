@@ -68,6 +68,7 @@ yellow placeholders — that is a render artifact, not a layout bug.
 .build/release/Matte --selftest    # geometry assertions
 .build/release/Matte --uicheck     # panel layout, all four expand states
 .build/release/Matte --render DIR  # render the panel to PNGs to review visually
+.build/release/Matte --flash      # show the padding outline for 3s on every display
 
 # Against the installed app:
 "/Applications/Matte.app/Contents/MacOS/Matte" --status
