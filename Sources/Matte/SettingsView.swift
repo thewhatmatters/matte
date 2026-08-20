@@ -156,7 +156,9 @@ struct SettingsView: View {
 
             Toggle("Show padding outline while adjusting", isOn: $settings.showOverlayOnChange)
                 .toggleStyle(PanelCheckboxStyle())
-            Toggle("Automatically re-size application windows", isOn: $settings.isEnabled)
+            // This is the master switch, so the label has to describe the whole
+            // behaviour, not sound like one feature among the others.
+            Toggle("Keep windows inside the padding", isOn: $settings.isEnabled)
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: settings.isEnabled) { commit() }
             Toggle("Open new windows filled to the padding", isOn: $settings.fillNewWindows)
