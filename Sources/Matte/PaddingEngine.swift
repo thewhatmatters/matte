@@ -29,11 +29,6 @@ final class PaddingEngine {
     /// clamping alone can only ever push inward.
     private var filledWindows: [WindowKey: CGRect] = [:]
 
-    /// Frames captured before the last "fill windows" run, so it can be undone.
-    /// Window references can't outlive the process, which is fine — undo is only
-    /// ever offered for the run that just happened.
-    private var fillUndoStack: [(window: AXUIElement, frame: CGRect)] = []
-
     private init() {}
 
     // MARK: - Lifecycle
@@ -74,7 +69,6 @@ final class PaddingEngine {
     func settingsChanged() {
         stubbornWindows.removeAll()
         retriedWindows.removeAll()
-        fillUndoStack.removeAll()
         restartSweepTimer()
         applyToAllWindows()
     }
@@ -285,45 +279,6 @@ final class PaddingEngine {
     }
 
     // MARK: - Filling
-
-    var canUndoFill: Bool { !fillUndoStack.isEmpty }
-
-    /// Sizes every eligible window on one screen to its padded rect.
-    @discardableResult
-    func fillWindows(on screen: NSScreen) -> Int {
-        guard AX.isTrusted, settings.isEnabled else { return 0 }
-        let padded = paddedRect(for: screen)
-        var snapshot: [(window: AXUIElement, frame: CGRect)] = []
-
-        for app in Self.managedApps() {
-            let pid = app.processIdentifier
-            for window in AX.elements(appElement(for: pid), kAXWindowsAttribute) {
-                guard isManageable(window: window), let axRect = AX.frame(window) else { continue }
-                let current = Coordinates.toAppKit(axRect)
-                guard let host = self.screen(for: current),
-                      Settings.key(for: host) == Settings.key(for: screen),
-                      !current.approximatelyEquals(padded) else { continue }
-                snapshot.append((window, current))
-                observeWindow(window, pid: pid)
-                fill(window: window, to: padded, key: WindowKey(window))
-            }
-        }
-        if !snapshot.isEmpty { fillUndoStack = snapshot }
-        return snapshot.count
-    }
-
-    func undoFill() {
-        let restore = fillUndoStack
-        fillUndoStack = []
-        isAdjusting = true
-        for entry in restore {
-            AX.setFrame(entry.window, Coordinates.toAccessibility(entry.frame))
-            filledWindows.removeValue(forKey: WindowKey(entry.window))
-        }
-        isAdjusting = false
-    }
-
-    func discardFillUndo() { fillUndoStack = [] }
 
     private func scheduleFillRetry(window: AXUIElement, padded: CGRect, key: WindowKey) {
         guard !retriedWindows.contains(key) else {

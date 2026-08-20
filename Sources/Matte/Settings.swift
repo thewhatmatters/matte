@@ -12,6 +12,12 @@ struct EdgePadding: Codable, Equatable {
 
     var isEmpty: Bool { top <= 0 && bottom <= 0 && left <= 0 && right <= 0 }
 
+    /// Whether one number can describe all four edges. When it can't, collapsing
+    /// to the single slider has no honest value to show.
+    var isUniform: Bool { top == bottom && bottom == left && left == right }
+
+    var largestEdge: Double { max(max(top, bottom), max(left, right)) }
+
     subscript(edge: Edge) -> Double {
         get {
             switch edge {

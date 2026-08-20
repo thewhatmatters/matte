@@ -24,7 +24,6 @@ struct SettingsView: View {
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var screens: [NSScreen] = NSScreen.screens
-    @State private var didFill = false
     @State private var selectedKey: String = Settings.shared.initialEditingTarget()
         ?? Settings.key(for: NSScreen.main ?? NSScreen.screens[0])
 
@@ -116,21 +115,6 @@ struct SettingsView: View {
                 }
 
                 Button {
-                    toggleFill()
-                } label: {
-                    Text(didFill ? "Undo" : "Fill")
-                        .font(theme.font(11))
-                        .foregroundStyle(theme.textPrimary)
-                        .padding(.horizontal, 8)
-                        .frame(height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(didFill
-                      ? "Put the windows back where they were"
-                      : "Size every window on this display to the padded area")
-
-                Button {
                     withAnimation(.easeOut(duration: 0.20)) {
                         settings.editEdgesIndividually.toggle()
                     }
@@ -149,7 +133,11 @@ struct SettingsView: View {
                 HStack(spacing: 16) {
                     PanelSlider(value: uniformBinding, range: 0...Settings.maxPadding,
                                 label: "Padding, all edges")
-                    numberBox(uniformBinding)
+                    UniformField(value: currentPadding.isUniform ? currentPadding.top : nil,
+                                 commit: setAll)
+                        .help(currentPadding.isUniform
+                              ? "Applies to all four edges"
+                              : "Edges differ — setting this replaces all four")
                 }
                 .transition(.opacity)
             }
@@ -277,23 +265,18 @@ struct SettingsView: View {
                 })
     }
 
+    /// Reading gives the largest edge so the slider has somewhere to sit; the
+    /// value is not written back, so switching modes never silently rewrites
+    /// mixed padding. Only an actual drag commits, and it commits all four.
     private var uniformBinding: Binding<Double> {
-        Binding(get: { EdgePadding.Edge.allCases.map { currentPadding[$0] }.max() ?? 0 },
-                set: { newValue in
-                    var padding = EdgePadding.zero
-                    EdgePadding.Edge.allCases.forEach { padding[$0] = clamped(newValue) }
-                    write(padding)
-                })
+        Binding(get: { currentPadding.largestEdge },
+                set: { setAll($0) })
     }
 
-    private func toggleFill() {
-        if didFill {
-            PaddingEngine.shared.undoFill()
-            didFill = false
-        } else if let screen = selectedScreen {
-            didFill = PaddingEngine.shared.fillWindows(on: screen) > 0
-        }
-        OverlayController.shared.flash()
+    private func setAll(_ value: Double) {
+        var padding = EdgePadding.zero
+        EdgePadding.Edge.allCases.forEach { padding[$0] = clamped(value) }
+        write(padding)
     }
 
     private var hasChanges: Bool {
@@ -312,7 +295,6 @@ struct SettingsView: View {
     }
 
     private func commit() {
-        didFill = false
         PaddingEngine.shared.settingsChanged()
         OverlayController.shared.flash()
     }

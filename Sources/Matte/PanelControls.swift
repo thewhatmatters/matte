@@ -113,6 +113,54 @@ struct SegmentedFieldRow: View {
     }
 }
 
+// MARK: - Uniform field
+
+/// The single padding input. Shows "Mixed" when the four edges disagree rather
+/// than picking one of them, so collapsing the per-edge fields never implies a
+/// value the padding doesn't actually have. Committing here sets all four.
+struct UniformField: View {
+    /// nil when the edges differ.
+    let value: Double?
+    let commit: (Double) -> Void
+
+    @State private var text: String = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("Mixed", text: $text)
+            .textFieldStyle(.plain)
+            .focused($isFocused)
+            .font(theme.font(14))
+            .foregroundStyle(value == nil && !isFocused ? theme.textSecondary : theme.textPrimary)
+            .multilineTextAlignment(.leading)
+            .padding(.leading, 8)
+            .padding(.trailing, 4)
+            .frame(width: 60, height: theme.fieldHeight)
+            .background(RoundedRectangle(cornerRadius: theme.fieldRadius).fill(theme.fieldFill))
+            .overlay(RoundedRectangle(cornerRadius: theme.fieldRadius)
+                .stroke(theme.fieldBorder, lineWidth: 1))
+            .onSubmit(apply)
+            .onChange(of: isFocused) { if !isFocused { apply() } }
+            .onChange(of: value) { syncFromValue() }
+            .onAppear(perform: syncFromValue)
+            .accessibilityLabel("Padding, all edges")
+            .accessibilityValue(value.map { "\(Int($0)) points" } ?? "mixed")
+    }
+
+    private func syncFromValue() {
+        guard !isFocused else { return }
+        text = value.map { String(Int($0)) } ?? ""
+    }
+
+    private func apply() {
+        guard let entered = Double(text.trimmingCharacters(in: .whitespaces)) else {
+            syncFromValue()
+            return
+        }
+        commit(entered)
+    }
+}
+
 // MARK: - Buttons
 
 struct GhostButtonStyle: ButtonStyle {

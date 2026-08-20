@@ -16,6 +16,7 @@ enum SelfTest {
         fullWindowsTrackPaddingChanges()
         fullWindowsAreRecognisedAfterRelaunch()
         draggingBetweenScreensKeepsAWindowFilled()
+        collapsingMixedEdgesIsNotDestructive()
         clampingKeepsWindowsInside()
         scopeSelectsTheRightWindows()
         coordinateFlipRoundTrips()
@@ -137,6 +138,29 @@ enum SelfTest {
         expect(!Geometry.matchesAppliedSize(CGRect(x: 0, y: 0, width: 900, height: 600),
                                             history: [builtInPadded]),
                "an unrelated window still does not match")
+    }
+
+    /// Switching from per-edge fields to the single slider must not invent a
+    /// value or quietly rewrite the padding.
+    private static func collapsingMixedEdgesIsNotDestructive() {
+        let uniform = EdgePadding(top: 24, bottom: 24, left: 24, right: 24)
+        expect(uniform.isUniform, "four equal edges collapse to one value")
+        expect(uniform.largestEdge == 24, "and that value is the one they share")
+
+        let dockGap = EdgePadding(top: 16, bottom: 90, left: 16, right: 16)
+        expect(!dockGap.isUniform, "a one-sided Dock gap has no single value")
+        expect(dockGap.largestEdge == 90, "the slider still has somewhere to sit")
+
+        // Neither collapsing candidate is right, which is why nothing is written
+        // until the user commits: the max would triple three edges, the min
+        // would throw away the Dock clearance.
+        expect(dockGap.largestEdge != dockGap.top,
+               "collapsing to the largest edge would change the others")
+
+        var applied = EdgePadding.zero
+        EdgePadding.Edge.allCases.forEach { applied[$0] = 32 }
+        expect(applied.isUniform && applied.top == 32,
+               "committing the single value does set all four")
     }
 
     private static func clampingKeepsWindowsInside() {
