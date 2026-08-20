@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         if NSApp.currentEvent?.type == .rightMouseUp {
-            toggleEnabled()
+            showMenu(from: sender)
             return
         }
         panel.onClose = { [weak self] in
@@ -50,7 +50,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel.isVisible { OverlayController.shared.flash() }
     }
 
-    private func toggleEnabled() {
+    /// Right-click menu. Assigning `statusItem.menu` makes the *left* click open
+    /// it too, so it is attached only for the duration of this click.
+    private func showMenu(from button: NSStatusBarButton) {
+        if panel.isVisible { panel.close() }
+
+        let menu = NSMenu()
+
+        let toggle = NSMenuItem(title: "Keep windows inside the padding",
+                                action: #selector(toggleEnabled), keyEquivalent: "")
+        toggle.target = self
+        toggle.state = Settings.shared.isEnabled ? .on : .off
+        menu.addItem(toggle)
+
+        let apply = NSMenuItem(title: "Apply Now", action: #selector(applyNow), keyEquivalent: "")
+        apply.target = self
+        apply.isEnabled = Settings.shared.isEnabled
+        menu.addItem(apply)
+
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: "Quit Matte", action: #selector(quit), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
+
+        statusItem.menu = menu
+        button.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func applyNow() {
+        PaddingEngine.shared.applyToAllWindows()
+        OverlayController.shared.flash()
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
+
+    @objc private func toggleEnabled() {
         Settings.shared.isEnabled.toggle()
         PaddingEngine.shared.settingsChanged()
         OverlayController.shared.flash()

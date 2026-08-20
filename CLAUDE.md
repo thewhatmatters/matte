@@ -74,6 +74,12 @@ yellow placeholders — that is a render artifact, not a layout bug.
 "/Applications/Matte.app/Contents/MacOS/Matte" --set-padding 24
 ```
 
+## Interaction
+
+Left-click the status item opens the panel; right-click opens a menu with the
+enable toggle, Apply Now and Quit. The panel's footer is Settings and Apply
+only — the design has no Quit, so the menu is the only way to exit.
+
 ## Gotchas
 
 **Run the CLI flags from the app bundle, not `.build/release`.** A bare
