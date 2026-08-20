@@ -64,6 +64,7 @@ yellow placeholders — that is a render artifact, not a layout bug.
 ```bash
 ./build.sh                  # build + bundle into ./build
 ./build.sh --install        # also sign, install to /Applications, launch
+./build.sh --release        # notarize, staple, and emit a shippable zip
 
 .build/release/Matte --selftest    # geometry assertions
 .build/release/Matte --uicheck     # panel layout, all four expand states
@@ -94,6 +95,13 @@ terminal-launched copy of the binary is attributed to the *terminal* by TCC, so
 calling `AXIsProcessTrusted()` there reports the terminal's grant and lies about
 the app's. `StatusFile` exists for exactly this reason. Never verify the
 Accessibility grant by running the binary directly.
+
+**Notarization is required before the app leaves this machine as a file.**
+Gatekeeper blocks an un-notarized app arriving via download, AirDrop or cloud
+sync. Building from source on the target Mac is never quarantined, which is why
+this is invisible until someone is handed a binary. `./build.sh --release`
+submits, staples and verifies; credentials live in a keychain profile, never in
+the repo.
 
 **Sign with a real identity, not ad-hoc.** TCC keys an ad-hoc signature to the
 binary hash, so every rebuild silently invalidates the Accessibility grant while

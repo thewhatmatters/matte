@@ -2,6 +2,7 @@
 # Builds Matte.app into ./build and (optionally) installs it.
 #   ./build.sh            build only
 #   ./build.sh --install  build, then install to /Applications and launch
+#   ./build.sh --release  build, notarize, staple, and produce a shippable zip
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -10,6 +11,8 @@ APP_NAME="Matte"
 BUNDLE_ID="so.whatmatters.matte"
 EXECUTABLE="Matte"
 VERSION="1.0.0"
+NOTARY_PROFILE="matte-notary"
+TEAM_ID="4P6GX328VY"
 BUILD_DIR="build"
 APP="$BUILD_DIR/$APP_NAME.app"
 
@@ -131,4 +134,51 @@ if [[ "${1:-}" == "--install" ]]; then
   else
     echo "    The Accessibility grant carried across this rebuild."
   fi
+fi
+
+if [[ "${1:-}" == "--release" ]]; then
+  # Gatekeeper blocks an un-notarized app the moment it arrives on another Mac
+  # by any route that sets the quarantine flag — download, AirDrop, cloud sync.
+  # Notarization is an automated malware scan, not App Review.
+  if [[ "$STABLE_SIGNATURE" -eq 0 ]]; then
+    echo "!!  Ad-hoc signed — notarization needs a Developer ID certificate." >&2
+    exit 1
+  fi
+
+  if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    cat >&2 <<HELP
+!!  No notarization credentials stored under the profile "$NOTARY_PROFILE".
+
+    Create an app-specific password at appleid.apple.com
+    (Sign-In and Security > App-Specific Passwords), then run:
+
+      xcrun notarytool store-credentials "$NOTARY_PROFILE" \\
+        --apple-id "<your-apple-id>" \\
+        --team-id "$TEAM_ID" \\
+        --password "<app-specific-password>"
+
+    The password is kept in your keychain, never in this repo.
+HELP
+    exit 1
+  fi
+
+  ZIP="$BUILD_DIR/$APP_NAME-$VERSION.zip"
+  echo "==> Submitting to Apple for notarization (usually a few minutes)"
+  ditto -c -k --keepParent "$APP" "$BUILD_DIR/submit.zip"
+  xcrun notarytool submit "$BUILD_DIR/submit.zip" \
+    --keychain-profile "$NOTARY_PROFILE" --wait
+  rm -f "$BUILD_DIR/submit.zip"
+
+  echo "==> Stapling the ticket"
+  xcrun stapler staple "$APP"
+
+  echo "==> Verifying"
+  spctl -a -vvv "$APP" 2>&1 | sed 's/^/    /'
+  xcrun stapler validate "$APP" 2>&1 | tail -1 | sed 's/^/    /'
+
+  rm -f "$ZIP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  echo
+  echo "==> Shippable: $ZIP"
+  echo "    This can be downloaded or AirDropped and will open without warnings."
 fi
