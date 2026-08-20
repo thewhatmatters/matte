@@ -20,7 +20,7 @@ if CommandLine.arguments.contains("--uicheck") {
         for showSettings in [false, true] {
             Settings.shared.editEdgesIndividually = perEdge
             Settings.shared.showSettingsSection = showSettings
-            let controller = NSHostingController(rootView: PanelRoot())
+            let controller = NSHostingController(rootView: PanelSurface())
             controller.sizingOptions = [.preferredContentSize]
             controller.view.layoutSubtreeIfNeeded()
             let size = controller.view.fittingSize
@@ -49,7 +49,10 @@ if let index = CommandLine.arguments.firstIndex(of: "--render"),
         Settings.shared.editEdgesIndividually = perEdge
         Settings.shared.showSettingsSection = showSettings
 
-        let renderer = ImageRenderer(content: PanelRoot().frame(width: 554))
+        // One warm-up pass: the drawer's height is measured during layout, so a
+        // cold render would come out collapsed in both states.
+        _ = ImageRenderer(content: PanelSurface()).nsImage
+        let renderer = ImageRenderer(content: PanelSurface())
         renderer.scale = 2
         guard let image = renderer.nsImage,
               let tiff = image.tiffRepresentation,

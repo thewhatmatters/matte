@@ -9,6 +9,11 @@ struct Theme {
     // Panel
     let width: CGFloat = 554
     let panelRadius: CGFloat = 12
+    /// Room around the panel for its shadow. The window is transparent and
+    /// larger than the panel, so the shadow is drawn in SwiftUI — an AppKit
+    /// window shadow is computed from the content's alpha and would go stale
+    /// the moment the drawer moves.
+    let shadowPad: CGFloat = 22
     let panelFill = Color(hex: 0x232427)
     let divider = Color(hex: 0x2E3033)
     let hairline = Color.white.opacity(0.10)

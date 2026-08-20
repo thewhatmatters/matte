@@ -20,11 +20,11 @@ private struct SectionHeightKey: PreferenceKey {
 
 struct SettingsView: View {
     @ObservedObject private var settings = Settings.shared
+    @ObservedObject private var metrics = PanelMetrics.shared
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var screens: [NSScreen] = NSScreen.screens
     @State private var didFill = false
-    @State private var sectionHeight: CGFloat = 0
     @State private var selectedKey: String = Settings.shared.initialEditingTarget()
         ?? Settings.key(for: NSScreen.main ?? NSScreen.screens[0])
 
@@ -50,7 +50,7 @@ struct SettingsView: View {
                 .background(GeometryReader { proxy in
                     Color.clear.preference(key: SectionHeightKey.self, value: proxy.size.height)
                 })
-                .frame(height: settings.showSettingsSection ? sectionHeight : 0, alignment: .bottom)
+                .frame(height: settings.showSettingsSection ? metrics.drawerHeight : 0, alignment: .bottom)
                 .clipped()
 
             footer
@@ -60,10 +60,7 @@ struct SettingsView: View {
         }
         .frame(width: theme.width)
         .background(theme.panelFill)
-        .onPreferenceChange(SectionHeightKey.self) {
-            sectionHeight = $0
-            PanelMetrics.shared.drawerHeight = $0
-        }
+        .onPreferenceChange(SectionHeightKey.self) { PanelMetrics.shared.drawerHeight = $0 }
         .onPreferenceChange(ChromeHeightKey.self) { PanelMetrics.shared.chromeHeight = $0 }
         .animation(.easeOut(duration: 0.18), value: hasChanges)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedKey)

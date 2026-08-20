@@ -31,7 +31,8 @@ final class PanelWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // The shadow is drawn in SwiftUI; see Theme.shadowPad.
+        hasShadow = false
         hidesOnDeactivate = false
         isMovableByWindowBackground = false
         animationBehavior = .utilityWindow
@@ -56,7 +57,15 @@ final class PanelMetrics: ObservableObject {
     /// Everything except the drawer, so this is unaffected by the animation.
     @Published var chromeHeight: CGFloat = 0
     @Published var drawerHeight: CGFloat = 0
-    var windowHeight: CGFloat { chromeHeight + drawerHeight }
+
+    /// What the window reserves: constant whether the drawer is open or not.
+    var reservedHeight: CGFloat { chromeHeight + drawerHeight }
+
+    /// What is actually visible right now — used for hit testing, since the
+    /// window extends past the panel.
+    var panelHeight: CGFloat {
+        chromeHeight + (Settings.shared.showSettingsSection ? drawerHeight : 0)
+    }
     private init() {}
 }
 
@@ -65,14 +74,21 @@ final class PanelMetrics: ObservableObject {
 final class PanelContainerView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        guard let panel = subviews.first, panel.frame.contains(local) else { return nil }
+        let pad = Theme.current.shadowPad
+        let panel = NSRect(x: pad,
+                           y: bounds.maxY - pad - PanelMetrics.shared.panelHeight,
+                           width: Theme.current.width,
+                           height: PanelMetrics.shared.panelHeight)
+        guard panel.contains(local) else { return nil }
         return super.hitTest(point)
     }
 }
 
 /// Root of the panel: the content plus the design's corner radius and hairline.
 /// The window itself is transparent, so this view is the entire visible surface.
-struct PanelRoot: View {
+/// The panel itself, at its natural height. `--render` and `--uicheck` measure
+/// this rather than the window wrapper around it.
+struct PanelSurface: View {
     private let theme = Theme.current
 
     var body: some View {
@@ -81,6 +97,29 @@ struct PanelRoot: View {
             .background(theme.panelFill)
             .clipShape(shape)
             .overlay { shape.stroke(theme.hairline, lineWidth: 1) }
+    }
+}
+
+struct PanelRoot: View {
+    @ObservedObject private var metrics = PanelMetrics.shared
+    private let theme = Theme.current
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PanelSurface()
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+            Spacer(minLength: 0)
+        }
+        .padding(theme.shadowPad)
+        // Fixed: the drawer changes the panel's height inside this frame, never
+        // the frame itself. Any height that reaches AppKit is applied in one
+        // step rather than interpolated, which is what made the panel jump.
+        // Before the first measurement — and in --render / --uicheck, which
+        // never run the window — fall back to laying out naturally.
+        .frame(width: theme.width + theme.shadowPad * 2,
+               height: metrics.reservedHeight > 0
+                   ? metrics.reservedHeight + theme.shadowPad * 2 : nil,
+               alignment: .top)
     }
 }
 
@@ -112,11 +151,8 @@ final class PanelController {
         // is open or not, and preference callbacks land a runloop turn later, so
         // fall back to the laid-out size on the very first show.
         hosting?.layoutSubtreeIfNeeded()
-        let reserved = PanelMetrics.shared.windowHeight
-        let laidOut = (hosting?.fittingSize.height ?? 0)
-            + (Settings.shared.showSettingsSection ? 0 : PanelMetrics.shared.drawerHeight)
         window.pinnedTopY = nil
-        window.setContentSize(NSSize(width: Theme.current.width, height: max(reserved, laidOut)))
+        window.setContentSize(Self.windowSize)
 
         position(window, under: button)
 
@@ -179,16 +215,23 @@ final class PanelController {
 
     /// The window reserves the drawer's height whether it is open or not, so
     /// this only fires when the rest of the layout changes.
+    private static var windowSize: NSSize {
+        let pad = Theme.current.shadowPad
+        return NSSize(width: Theme.current.width + pad * 2,
+                      height: max(PanelMetrics.shared.reservedHeight, 1) + pad * 2)
+    }
+
+    /// Only fires when the layout outside the drawer changes — the drawer's
+    /// own height is reserved either way.
     private func resizeToMetrics() {
         guard let window, window.isVisible else { return }
-        let height = PanelMetrics.shared.windowHeight
-        guard height > 1, abs(window.frame.height - height) > 0.5 else { return }
+        let size = Self.windowSize
+        guard size.height > 1, abs(window.frame.height - size.height) > 0.5 else { return }
         var frame = window.frame
         let top = window.pinnedTopY ?? frame.maxY
-        frame.size.height = height
-        frame.origin.y = top - height
+        frame.size = size
+        frame.origin.y = top - size.height
         window.setFrame(frame, display: true, animate: false)
-        window.invalidateShadow()
     }
 
     private func position(_ window: PanelWindow, under button: NSStatusBarButton) {
@@ -197,15 +240,19 @@ final class PanelController {
         let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? .zero
         let size = window.frame.size
+        let pad = Theme.current.shadowPad
 
-        var x = anchor.midX - size.width / 2
-        x = min(max(x, visible.minX + 8), visible.maxX - size.width - 8)
+        // Position the visible panel, then offset for the shadow margin the
+        // window carries around it.
+        var x = anchor.midX - Theme.current.width / 2
+        x = min(max(x, visible.minX + 8), visible.maxX - Theme.current.width - 8)
         var top = anchor.minY - 6
-        if top - size.height < visible.minY + 8 { top = anchor.maxY + 6 + size.height }
+        if top - PanelMetrics.shared.panelHeight < visible.minY + 8 { top = anchor.maxY + 6 }
 
+        let windowTop = (top + pad).rounded()
         window.pinnedTopY = nil
-        window.setFrameOrigin(NSPoint(x: x.rounded(), y: (top - size.height).rounded()))
-        pendingTopAnchor = top.rounded()
+        window.setFrameOrigin(NSPoint(x: (x - pad).rounded(), y: windowTop - size.height))
+        pendingTopAnchor = windowTop
     }
 
     private func installMonitors() {
