@@ -48,6 +48,8 @@ struct Theme {
     let buttonHeight: CGFloat = 28
     let ghostFill = Color(hex: 0x2A2B2E)
     let accent = Color(hex: 0x3D9AFF)
+    /// Apply carries a 1px inset highlight along its top edge, not a full ring.
+    let accentTopHighlight = Color.white.opacity(0.141)
     let iconButtonActive = Color.white.opacity(0.10)
 
     // Text
@@ -55,14 +57,29 @@ struct Theme {
     let textDisplayName = Color.white
     let textSecondary = Color(hex: 0xA3A3A3)
     let textLabel = Color(hex: 0x6C6F75)
+    /// The design gives the Reset label its own value, a shade under textPrimary.
+    let textOnGhost = Color(hex: 0xF2F3F4)
     let textOnAccent = Color.white
     let checkFill = Color(hex: 0xEBEBEB)
     let checkMark = Color(hex: 0x171717)
 
-    // The design specifies Figtree, which is not a system font and is not
-    // installed here. SF at the same metrics until it is vendored.
+    /// Figtree ships in the bundle (Resources/Fonts, registered via
+    /// ATSApplicationFontsPath). Falls back to the system face when the app is
+    /// run as a bare executable, where bundle resources aren't registered.
     func font(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        guard Self.figtreeIsAvailable else { return .system(size: size, weight: weight) }
+        return .custom(Self.figtreeFace(for: weight), size: size)
+    }
+
+    private static let figtreeIsAvailable = NSFont(name: "Figtree-Regular", size: 12) != nil
+
+    private static func figtreeFace(for weight: Font.Weight) -> String {
+        switch weight {
+        case .semibold, .bold, .heavy, .black: return "Figtree-SemiBold"
+        case .medium: return "Figtree-Medium"
+        case .light, .thin, .ultraLight: return "Figtree-Light"
+        default: return "Figtree-Regular"
+        }
     }
 }
 

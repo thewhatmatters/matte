@@ -150,8 +150,14 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 12)
             .frame(height: theme.buttonHeight)
             .background(RoundedRectangle(cornerRadius: theme.buttonRadius).fill(theme.accent))
-            .overlay(RoundedRectangle(cornerRadius: theme.buttonRadius)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1))
+            .overlay(alignment: .top) {
+                // The design's inset highlight sits on the top edge only.
+                Rectangle()
+                    .fill(theme.accentTopHighlight)
+                    .frame(height: 1)
+                    .padding(.horizontal, theme.buttonRadius / 2)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: theme.buttonRadius))
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(Rectangle())
     }

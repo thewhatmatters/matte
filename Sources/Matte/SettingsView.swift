@@ -65,7 +65,7 @@ struct SettingsView: View {
                             ResetGlyph()
                             Text("Reset").font(theme.font(11))
                         }
-                        .foregroundStyle(theme.textPrimary)
+                        .foregroundStyle(theme.textOnGhost)
                         .padding(.horizontal, 8)
                         .frame(height: 24)
                         .contentShape(Rectangle())

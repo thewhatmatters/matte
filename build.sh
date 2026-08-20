@@ -20,6 +20,7 @@ echo "==> Assembling bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp ".build/release/$EXECUTABLE" "$APP/Contents/MacOS/$EXECUTABLE"
+cp -R Resources/Fonts "$APP/Contents/Resources/Fonts"
 
 echo "==> Building icon"
 swift Tools/makeicon.swift "$BUILD_DIR/icon" >/dev/null
@@ -52,6 +53,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
+    <key>ATSApplicationFontsPath</key><string>Fonts</string>
     <key>NSHumanReadableCopyright</key><string>MIT Licensed</string>
 </dict>
 </plist>
