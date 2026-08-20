@@ -1,12 +1,29 @@
+Matte — Source-Available Licence
 Copyright © 2026 WhatMatters. All rights reserved.
 
-This software and its source code are proprietary and confidential. No part of
-this software may be reproduced, distributed, modified, publicly displayed, or
-transmitted in any form or by any means, including by photocopying, recording,
-or other electronic or mechanical methods, without the prior written permission
-of the copyright holder.
+The source code in this repository is made available for you to read, build,
+and run. It is not open source: the copyright holder retains all rights not
+expressly granted below.
 
-Unauthorised copying of this file, via any medium, is strictly prohibited.
+YOU MAY
+
+  - View, study, and modify the source code.
+  - Compile the software and run your own build on machines you own or control,
+    for personal or internal business use.
+  - Submit contributions back to this repository.
+
+YOU MAY NOT
+
+  - Redistribute the source code or any compiled build, modified or otherwise,
+    whether free of charge or for payment.
+  - Sell, sublicense, rent, or offer the software as a service.
+  - Publish a fork or derivative work for others to obtain.
+  - Remove or alter this notice.
+
+Official pre-built, signed, and notarised binaries are distributed separately
+and may be subject to their own purchase terms.
+
+NO WARRANTY
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

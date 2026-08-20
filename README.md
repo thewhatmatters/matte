@@ -85,7 +85,10 @@ plus any windows currently outside it. `--selftest` runs the geometry assertions
 
 ## License
 
-Proprietary — all rights reserved. See [LICENSE](LICENSE).
+Source-available, not open source. You may read, build, and run Matte yourself;
+you may not redistribute or sell it. See [LICENSE](LICENSE).
+
+Pre-built signed and notarised binaries are distributed separately.
 
 Figtree is bundled under the SIL Open Font License 1.1
 (`Resources/Fonts/OFL.txt`).
