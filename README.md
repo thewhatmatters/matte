@@ -85,4 +85,7 @@ plus any windows currently outside it. `--selftest` runs the geometry assertions
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Proprietary — all rights reserved. See [LICENSE](LICENSE).
+
+Figtree is bundled under the SIL Open Font License 1.1
+(`Resources/Fonts/OFL.txt`).
