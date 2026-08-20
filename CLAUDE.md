@@ -132,11 +132,11 @@ is never interrupted.
 ## Knowledge vault — project layer
 
 This project's durable knowledge (overview, decisions, gotchas) lives in the
-cross-project vault at `<vault>/projects/display-padding/`
+cross-project vault at `<vault>/projects/matte/`
 (default vault: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/OBSDN`).
 
 - **Read first:** before re-deriving an architecture decision or re-debugging
-  a non-obvious issue, check `projects/display-padding/index.md` there.
+  a non-obvious issue, check `projects/matte/index.md` there.
 - **Write path:** durable insights go through `/curate-vault` (gated) —
   never write vault articles directly.
 <!-- wire-vault:end -->
