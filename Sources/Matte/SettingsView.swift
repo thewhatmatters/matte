@@ -2,6 +2,15 @@ import SwiftUI
 
 /// Natural height of the settings section, measured while it is collapsed so
 /// the reveal has a concrete value to animate towards.
+/// Height of everything except the drawer. Measured separately so the drawer's
+/// animation never feeds back into the window's size.
+private struct ChromeHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value += nextValue()
+    }
+}
+
 private struct SectionHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -24,8 +33,13 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            paddingSection
+            VStack(spacing: 0) {
+                header
+                paddingSection
+            }
+            .background(GeometryReader { proxy in
+                Color.clear.preference(key: ChromeHeightKey.self, value: proxy.size.height)
+            })
             // Bottom alignment is what makes this read as a slide. Anchored to
             // the top, a growing clip reveals the section from its first row
             // down — a wipe. Anchored to the bottom, the section sits above the
@@ -38,11 +52,19 @@ struct SettingsView: View {
                 })
                 .frame(height: settings.showSettingsSection ? sectionHeight : 0, alignment: .bottom)
                 .clipped()
+
             footer
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: ChromeHeightKey.self, value: proxy.size.height)
+                })
         }
         .frame(width: theme.width)
         .background(theme.panelFill)
-        .onPreferenceChange(SectionHeightKey.self) { sectionHeight = $0 }
+        .onPreferenceChange(SectionHeightKey.self) {
+            sectionHeight = $0
+            PanelMetrics.shared.drawerHeight = $0
+        }
+        .onPreferenceChange(ChromeHeightKey.self) { PanelMetrics.shared.chromeHeight = $0 }
         .animation(.easeOut(duration: 0.18), value: hasChanges)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedKey)
         .onReceive(ticker) { _ in tick() }

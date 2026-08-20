@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// NSPopover's arrow, corner radius and material are not public API, so a
@@ -45,6 +46,30 @@ final class PanelWindow: NSPanel {
     override func cancelOperation(_ sender: Any?) { orderOut(nil) }
 }
 
+/// Heights SwiftUI measures for the controller. The drawer's space is reserved
+/// in the window permanently, so opening it never resizes the window — an
+/// NSHostingController reports its final preferredContentSize immediately, so a
+/// window driven from it snaps to the new height in one step while the content
+/// animates inside it.
+final class PanelMetrics: ObservableObject {
+    static let shared = PanelMetrics()
+    /// Everything except the drawer, so this is unaffected by the animation.
+    @Published var chromeHeight: CGFloat = 0
+    @Published var drawerHeight: CGFloat = 0
+    var windowHeight: CGFloat { chromeHeight + drawerHeight }
+    private init() {}
+}
+
+/// Clicks below the panel must reach whatever is behind it: the window is sized
+/// for the drawer even when it is closed, so part of it is transparent.
+final class PanelContainerView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        guard let panel = subviews.first, panel.frame.contains(local) else { return nil }
+        return super.hitTest(point)
+    }
+}
+
 /// Root of the panel: the content plus the design's corner radius and hairline.
 /// The window itself is transparent, so this view is the entire visible surface.
 struct PanelRoot: View {
@@ -62,7 +87,8 @@ struct PanelRoot: View {
 /// Shows and positions the panel under the status item, and owns dismissal.
 final class PanelController {
     private var window: PanelWindow?
-    private var controller: NSHostingController<PanelRoot>?
+    private var hosting: NSHostingView<PanelRoot>?
+    private var metricsObserver: AnyCancellable?
     private var globalMonitor: Any?
     private var localMonitor: Any?
     /// Anchor to apply once the entry animation has finished — pinning during
@@ -82,7 +108,16 @@ final class PanelController {
         // Reset is offered against the state the panel opened in.
         Settings.shared.captureBaselines()
 
-        controller?.view.layoutSubtreeIfNeeded()
+        // Size before positioning: the drawer's height is reserved whether it
+        // is open or not, and preference callbacks land a runloop turn later, so
+        // fall back to the laid-out size on the very first show.
+        hosting?.layoutSubtreeIfNeeded()
+        let reserved = PanelMetrics.shared.windowHeight
+        let laidOut = (hosting?.fittingSize.height ?? 0)
+            + (Settings.shared.showSettingsSection ? 0 : PanelMetrics.shared.drawerHeight)
+        window.pinnedTopY = nil
+        window.setContentSize(NSSize(width: Theme.current.width, height: max(reserved, laidOut)))
+
         position(window, under: button)
 
         window.alphaValue = 0
@@ -120,14 +155,40 @@ final class PanelController {
 
     private func makeWindow() -> PanelWindow {
         let window = PanelWindow()
-        let controller = NSHostingController(rootView: PanelRoot())
-        // Lets the window track the SwiftUI content's height instead of clipping
-        // it when a section appears or the padding mode changes.
-        controller.sizingOptions = [.preferredContentSize]
-        window.contentViewController = controller
-        self.controller = controller
+        let container = PanelContainerView(frame: .zero)
+        let hosting = NSHostingView(rootView: PanelRoot())
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(hosting)
+        // No bottom constraint: the panel takes its intrinsic height and hangs
+        // from the top of the window, so the drawer animates inside a window
+        // whose size never changes.
+        NSLayoutConstraint.activate([
+            hosting.topAnchor.constraint(equalTo: container.topAnchor),
+            hosting.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+        ])
+        window.contentView = container
+        self.hosting = hosting
+
+        metricsObserver = PanelMetrics.shared.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.resizeToMetrics() }
 
         return window
+    }
+
+    /// The window reserves the drawer's height whether it is open or not, so
+    /// this only fires when the rest of the layout changes.
+    private func resizeToMetrics() {
+        guard let window, window.isVisible else { return }
+        let height = PanelMetrics.shared.windowHeight
+        guard height > 1, abs(window.frame.height - height) > 0.5 else { return }
+        var frame = window.frame
+        let top = window.pinnedTopY ?? frame.maxY
+        frame.size.height = height
+        frame.origin.y = top - height
+        window.setFrame(frame, display: true, animate: false)
+        window.invalidateShadow()
     }
 
     private func position(_ window: PanelWindow, under button: NSStatusBarButton) {
