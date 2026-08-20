@@ -67,17 +67,6 @@ struct PanelSlider: View {
 /// TextField can't be restyled — TextFieldStyle has no usable requirement — so
 /// this strips it to `.plain` and draws the surface underneath.
 struct PanelNumberField: View {
-    /// The design draws a corner per field, in reading order, so each edge is
-    /// paired with the corner that sits in its slot.
-    static func corner(for edge: EdgePadding.Edge) -> Glyph.Corner {
-        switch edge {
-        case .top: return .topLeft
-        case .right: return .topRight
-        case .bottom: return .bottomLeft
-        case .left: return .bottomRight
-        }
-    }
-
     @Binding var value: Double
     /// nil means "share the row equally" — used by the four-up edge row.
     var width: CGFloat? = 48
@@ -86,7 +75,7 @@ struct PanelNumberField: View {
     var body: some View {
         HStack(spacing: 4) {
             if let edge {
-                CornerGlyph(lit: Self.corner(for: edge)).frame(width: 24, height: 24)
+                EdgeGlyph(edge: edge).frame(width: 24, height: 24)
             }
             TextField("", value: $value, format: .number.precision(.fractionLength(0)))
                 .textFieldStyle(.plain)
