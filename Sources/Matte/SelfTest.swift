@@ -21,6 +21,7 @@ enum SelfTest {
         scopeSelectsTheRightWindows()
         coordinateFlipRoundTrips()
         versionComparisonOrdersNumerically()
+        newWindowFillFloorAdmitsOrdinaryWindows()
 
         print(failures == 0
               ? "PASS — \(checks) checks"
@@ -225,6 +226,26 @@ enum SelfTest {
         expect(!UpdateCheck.isNewer("1.0.0", than: "1.0.1"), "an older version is not newer")
         expect(UpdateCheck.isNewer("1.0.1", than: "1.0"), "a longer version with more detail is newer")
         expect(!UpdateCheck.isNewer("1.0", than: "1.0.0"), "trailing zeroes are equal, not newer")
+    }
+
+    /// The floor exists to skip palettes, not document windows.
+    private static func newWindowFillFloorAdmitsOrdinaryWindows() {
+        let bounds = Geometry.contentBounds(frame: studioFrame, visibleFrame: studioVisible)
+
+        // TextEdit's default window on a 2880pt-wide screen. The old 28% floor
+        // wanted 806pt and skipped it, so the setting appeared to do nothing.
+        let textEdit = CGRect(x: 400, y: 400, width: 656, height: 422)
+        expect(Geometry.isFillCandidate(textEdit, bounds: bounds),
+               "an ordinary document window is filled")
+        expect(!Geometry.isFillCandidate(textEdit, bounds: bounds, minimumFraction: 0.28),
+               "the old floor is what excluded it")
+
+        let palette = CGRect(x: 100, y: 100, width: 220, height: 160)
+        expect(!Geometry.isFillCandidate(palette, bounds: bounds), "a palette is still skipped")
+
+        let tallNarrow = CGRect(x: 0, y: 0, width: 300, height: 1400)
+        expect(!Geometry.isFillCandidate(tallNarrow, bounds: bounds),
+               "both dimensions must clear the floor, not either")
     }
 
     private static func padded(_ padding: EdgePadding) -> CGRect {

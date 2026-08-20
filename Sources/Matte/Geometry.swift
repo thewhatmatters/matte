@@ -66,6 +66,17 @@ enum Geometry {
             && !current.approximatelyEquals(applied, tolerance: tolerance)
     }
 
+    /// Whether a newly opened window is worth filling. Resizability does the
+    /// real filtering; this only rules out the genuinely tiny — palettes and
+    /// inspectors — so the floor can stay low. At 28% it was 806pt on a 2880pt
+    /// screen, which skipped ordinary document windows and made the setting
+    /// look broken.
+    static func isFillCandidate(_ rect: CGRect, bounds: CGRect,
+                                minimumFraction: CGFloat = 0.15) -> Bool {
+        rect.width >= bounds.width * minimumFraction
+            && rect.height >= bounds.height * minimumFraction
+    }
+
     static func clamp(_ rect: CGRect, into bounds: CGRect) -> CGRect {
         let width = min(rect.width, bounds.width)
         let height = min(rect.height, bounds.height)

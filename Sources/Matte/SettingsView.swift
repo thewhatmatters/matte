@@ -203,6 +203,10 @@ struct SettingsView: View {
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: launchAtLogin) { LoginItem.set(launchAtLogin) }
 
+            ExcludedAppsSection(excluded: $settings.excludedBundleIDs) { commit() }
+
+            Rectangle().fill(theme.divider).frame(height: 1).padding(.horizontal, 8)
+
             versionRow
         }
         .padding(8)

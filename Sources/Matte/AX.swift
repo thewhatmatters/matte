@@ -53,6 +53,17 @@ enum AX {
         return result == .success
     }
 
+    /// Whether the window will accept a new size at all. A window that refuses
+    /// is one we could not fill even if we wanted to — and refusing is what most
+    /// dialogs and palettes do, which makes this a better filter than guessing
+    /// from size.
+    static func isResizable(_ window: AXUIElement) -> Bool {
+        var settable: DarwinBoolean = false
+        guard AXUIElementIsAttributeSettable(window, kAXSizeAttribute as CFString, &settable) == .success
+        else { return false }
+        return settable.boolValue
+    }
+
     static var isTrusted: Bool {
         AXIsProcessTrusted()
     }

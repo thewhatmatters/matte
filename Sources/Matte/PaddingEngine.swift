@@ -299,17 +299,17 @@ final class PaddingEngine {
         }
     }
 
-    /// Opt-in: size a freshly created window to the padded area. Windows that
-    /// open small are left alone — dialogs and palettes report as standard
-    /// windows too, and forcing those full is worse than doing nothing.
+    /// Opt-in: size a freshly created window to the padded area. Dialogs and
+    /// palettes report as standard windows too, so they are filtered on whether
+    /// they will accept a size at all, plus a low floor for the genuinely tiny.
     private func fillIfEligible(window: AXUIElement) {
         guard settings.isEnabled, settings.fillNewWindows, AX.isTrusted else { return }
-        guard isManageable(window: window), let axRect = AX.frame(window) else { return }
+        guard isManageable(window: window), AX.isResizable(window),
+              let axRect = AX.frame(window) else { return }
         let current = Coordinates.toAppKit(axRect)
         guard let screen = screen(for: current) else { return }
         let bounds = contentBounds(for: screen)
-        guard current.width >= bounds.width * 0.28,
-              current.height >= bounds.height * 0.28 else { return }
+        guard Geometry.isFillCandidate(current, bounds: bounds) else { return }
         let padded = paddedRect(for: screen)
         guard !current.approximatelyEquals(padded) else { return }
         fill(window: window, to: padded, key: WindowKey(window))
