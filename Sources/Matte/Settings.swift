@@ -190,12 +190,42 @@ final class Settings: ObservableObject {
     /// was there rather than zeroing. Deliberately not persisted — it is a
     /// per-session baseline, not a stored preference.
     private var baselines: [String: EdgePadding] = [:]
+    /// Engine-relevant state as of the last Apply (or panel open). Apply is
+    /// idle until something here actually moves.
+    private var applyBaseline: ApplySnapshot?
+
+    private struct ApplySnapshot: Equatable {
+        var isEnabled: Bool
+        var fillNewWindows: Bool
+        var excludedBundleIDs: [String]
+        var globalPadding: EdgePadding
+        var overrides: [String: EdgePadding]
+    }
 
     func captureBaselines() {
         baselines = Dictionary(uniqueKeysWithValues: NSScreen.screens.map {
             (Self.key(for: $0), padding(for: $0))
         })
+        applyBaseline = currentApplySnapshot()
         objectWillChange.send()
+    }
+
+    /// Apply has nothing to do until the user edits padding or an engine setting.
+    var hasPendingApply: Bool {
+        applyBaseline.map { $0 != currentApplySnapshot() } ?? false
+    }
+
+    func markApplied() {
+        applyBaseline = currentApplySnapshot()
+        objectWillChange.send()
+    }
+
+    private func currentApplySnapshot() -> ApplySnapshot {
+        ApplySnapshot(isEnabled: isEnabled,
+                      fillNewWindows: fillNewWindows,
+                      excludedBundleIDs: excludedBundleIDs,
+                      globalPadding: globalPadding,
+                      overrides: overrides)
     }
 
     func baseline(for screen: NSScreen) -> EdgePadding {

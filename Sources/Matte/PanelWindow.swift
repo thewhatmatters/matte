@@ -57,6 +57,13 @@ final class PanelMetrics: ObservableObject {
     /// Everything except the drawer, so this is unaffected by the animation.
     @Published var chromeHeight: CGFloat = 0
     @Published var drawerHeight: CGFloat = 0
+    /// When the Never-resize combobox is open, Escape dismisses it rather than
+    /// the whole panel.
+    @Published var comboboxOpen = false
+    /// Panel-coordinate frames for the combobox, converted to window space
+    /// when deciding whether a click landed inside it.
+    var comboboxFieldPanelRect = CGRect.zero
+    var comboboxMenuPanelRect = CGRect.zero
 
     /// What the window reserves: constant whether the drawer is open or not.
     var reservedHeight: CGFloat { chromeHeight + drawerHeight }
@@ -175,6 +182,7 @@ final class PanelController {
     }
 
     func close() {
+        PanelMetrics.shared.comboboxOpen = false
         removeMonitors()
         window?.pinnedTopY = nil
         guard let window, window.isVisible else { onClose?(); return }
@@ -262,11 +270,44 @@ final class PanelController {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.close()
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard event.keyCode == 53 else { return event }   // Escape
-            self?.close()
-            return nil
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
+            let metrics = PanelMetrics.shared
+            if event.type == .keyDown, event.keyCode == 53 {   // Escape
+                if metrics.comboboxOpen {
+                    metrics.comboboxOpen = false
+                    return nil
+                }
+                self?.close()
+                return nil
+            }
+            if event.type == .leftMouseDown || event.type == .rightMouseDown,
+               metrics.comboboxOpen,
+               self?.comboboxContains(event.locationInWindow) != true {
+                metrics.comboboxOpen = false
+            }
+            return event
         }
+    }
+
+    /// Combobox frames are in SettingsView space (origin at the panel's
+    /// top-left). The hosting view is padded by `shadowPad` and flipped, so
+    /// convert through it rather than guessing window coordinates.
+    private func comboboxContains(_ windowPoint: NSPoint) -> Bool {
+        let field = windowRect(fromPanel: PanelMetrics.shared.comboboxFieldPanelRect)
+        let menu = windowRect(fromPanel: PanelMetrics.shared.comboboxMenuPanelRect)
+        var hit = field
+        if menu.width > 0 { hit = hit.union(menu) }
+        return hit.insetBy(dx: -4, dy: -4).contains(windowPoint)
+    }
+
+    private func windowRect(fromPanel rect: CGRect) -> CGRect {
+        guard let hosting, rect.width > 0, rect.height > 0 else { return .null }
+        let pad = Theme.current.shadowPad
+        let local = NSRect(x: pad + rect.minX,
+                           y: pad + rect.minY,
+                           width: rect.width,
+                           height: rect.height)
+        return hosting.convert(local, to: nil)
     }
 
     private func removeMonitors() {

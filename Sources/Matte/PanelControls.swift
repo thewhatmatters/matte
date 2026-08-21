@@ -183,22 +183,32 @@ struct GhostButtonStyle: ButtonStyle {
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(theme.font(13))
-            .foregroundStyle(theme.textOnAccent)
+            .foregroundStyle(isEnabled ? theme.textOnAccent : theme.textLabel)
             .padding(.horizontal, 12)
             .frame(height: theme.buttonHeight)
-            .background(RoundedRectangle(cornerRadius: theme.buttonRadius).fill(theme.accent))
+            .background(
+                RoundedRectangle(cornerRadius: theme.buttonRadius)
+                    .fill(isEnabled ? theme.accent : theme.ghostFill)
+            )
             .overlay(alignment: .top) {
-                // The design's inset highlight sits on the top edge only.
-                Rectangle()
-                    .fill(theme.accentTopHighlight)
-                    .frame(height: 1)
-                    .padding(.horizontal, theme.buttonRadius / 2)
+                if isEnabled {
+                    Rectangle()
+                        .fill(theme.accentTopHighlight)
+                        .frame(height: 1)
+                        .padding(.horizontal, theme.buttonRadius / 2)
+                }
             }
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.buttonRadius)
+                    .stroke(isEnabled ? Color.clear : theme.hairline, lineWidth: 1)
+            )
             .clipShape(RoundedRectangle(cornerRadius: theme.buttonRadius))
-            .opacity(configuration.isPressed ? 0.75 : 1)
+            .opacity(configuration.isPressed && isEnabled ? 0.75 : 1)
             .contentShape(Rectangle())
     }
 }

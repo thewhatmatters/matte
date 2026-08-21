@@ -21,12 +21,13 @@ private struct SectionHeightKey: PreferenceKey {
 struct SettingsView: View {
     @ObservedObject private var settings = Settings.shared
     @ObservedObject private var metrics = PanelMetrics.shared
-    @ObservedObject private var updates = UpdateCheck.shared
     @State private var isTrusted = AX.isTrusted
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var screens: [NSScreen] = NSScreen.screens
     @State private var selectedKey: String = Settings.shared.initialEditingTarget()
         ?? Settings.key(for: NSScreen.main ?? NSScreen.screens[0])
+    @State private var exclusionQuery = ""
+    @State private var exclusionHighlight: String?
 
     private let theme = Theme.current
     private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
@@ -60,9 +61,23 @@ struct SettingsView: View {
         }
         .frame(width: theme.width)
         .background(theme.panelFill)
+        .overlayPreferenceValue(ComboboxAnchorKey.self) { anchor in
+            ExclusionMenuLayer(anchor: anchor,
+                               excluded: $settings.excludedBundleIDs,
+                               query: $exclusionQuery,
+                               highlighted: $exclusionHighlight,
+                               onChange: commit)
+        }
         .onPreferenceChange(SectionHeightKey.self) { PanelMetrics.shared.drawerHeight = $0 }
         .onPreferenceChange(ChromeHeightKey.self) { PanelMetrics.shared.chromeHeight = $0 }
+        .onChange(of: metrics.comboboxOpen) { _, open in
+            if !open {
+                exclusionQuery = ""
+                exclusionHighlight = nil
+            }
+        }
         .animation(.easeOut(duration: 0.18), value: hasChanges)
+        .animation(.easeOut(duration: 0.18), value: settings.hasPendingApply)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedKey)
         .onReceive(ticker) { _ in tick() }
         .onReceive(NotificationCenter.default.publisher(
@@ -203,11 +218,9 @@ struct SettingsView: View {
                 .toggleStyle(PanelCheckboxStyle())
                 .onChange(of: launchAtLogin) { LoginItem.set(launchAtLogin) }
 
-            ExcludedAppsSection(excluded: $settings.excludedBundleIDs) { commit() }
-
-            Rectangle().fill(theme.divider).frame(height: 1).padding(.horizontal, 8)
-
-            versionRow
+            ExcludedAppsSection(excluded: $settings.excludedBundleIDs,
+                                query: $exclusionQuery,
+                                highlighted: $exclusionHighlight) { commit() }
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -215,30 +228,6 @@ struct SettingsView: View {
         .overlay(alignment: .top) {
             Rectangle().fill(theme.divider).frame(height: 1)
         }
-    }
-
-    /// Doubles as the About surface: the version is always shown, and becomes a
-    /// link when a newer release is published.
-    private var versionRow: some View {
-        HStack(spacing: 6) {
-            Text("Matte \(updates.currentVersion)")
-                .font(theme.font(11))
-                .foregroundStyle(theme.textLabel)
-            if let available = updates.availableVersion {
-                Button {
-                    updates.openReleasePage()
-                } label: {
-                    Text("\(available) available")
-                        .font(theme.font(11, .medium))
-                        .foregroundStyle(theme.accent)
-                        .underline()
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.top, 6)
     }
 
     // MARK: - Footer
@@ -251,14 +240,20 @@ struct SettingsView: View {
                 withAnimation(.spring(response: 0.30, dampingFraction: 1.0)) {
                     settings.showSettingsSection.toggle()
                 }
+                PanelMetrics.shared.comboboxOpen = false
             }
                 .buttonStyle(GhostButtonStyle())
             Spacer()
             Button("Apply") {
                 PaddingEngine.shared.applyToAllWindows()
                 OverlayController.shared.flash()
+                settings.markApplied()
             }
             .buttonStyle(PrimaryButtonStyle())
+            .disabled(!settings.hasPendingApply)
+            .help(settings.hasPendingApply
+                  ? "Apply the current padding to open windows"
+                  : "No changes to apply")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -341,5 +336,70 @@ struct SettingsView: View {
             isTrusted = trusted
             if trusted { PaddingEngine.shared.retryAfterPermissionGranted() }
         }
+    }
+}
+
+/// Drawn over the panel so the list covers existing UI instead of growing the
+/// window. Hit-testing is off while closed so the field can open the list.
+private struct ExclusionMenuLayer: View {
+    let anchor: Anchor<CGRect>?
+    @ObservedObject private var metrics = PanelMetrics.shared
+    @Binding var excluded: [String]
+    @Binding var query: String
+    @Binding var highlighted: String?
+    let onChange: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let anchor {
+                let field = proxy[anchor]
+                Color.clear
+                    .onAppear { PanelMetrics.shared.comboboxFieldPanelRect = field }
+                    .onChange(of: field) { _, rect in
+                        PanelMetrics.shared.comboboxFieldPanelRect = rect
+                    }
+                    .allowsHitTesting(false)
+                if metrics.comboboxOpen {
+                    menu(field: field, panelHeight: proxy.size.height)
+                }
+            }
+        }
+        .allowsHitTesting(metrics.comboboxOpen)
+    }
+
+    @ViewBuilder
+    private func menu(field: CGRect, panelHeight: CGFloat) -> some View {
+        let gap: CGFloat = 4
+        let spaceBelow = panelHeight - field.maxY - gap
+        let spaceAbove = field.minY - gap
+        let down = spaceBelow >= 80 && spaceBelow >= spaceAbove
+        let height = min(168, max(44, down ? spaceBelow : spaceAbove))
+        let y = down ? field.maxY + gap : field.minY - gap - height
+        let menuRect = CGRect(x: field.minX, y: y, width: field.width, height: height)
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .contentShape(PunchHole(hole: field), eoFill: true)
+                .onTapGesture { metrics.comboboxOpen = false }
+            ExcludedAppsMenu(excluded: $excluded,
+                             query: $query,
+                             highlighted: $highlighted,
+                             onChange: onChange)
+                .frame(width: field.width, height: height, alignment: .top)
+                .offset(x: field.minX, y: y)
+        }
+        .onAppear { PanelMetrics.shared.comboboxMenuPanelRect = menuRect }
+        .onDisappear { PanelMetrics.shared.comboboxMenuPanelRect = .zero }
+    }
+}
+
+/// Full rect minus `hole`, so the overlay can dismiss on a click without
+/// swallowing taps on the combobox field underneath.
+private struct PunchHole: Shape {
+    var hole: CGRect
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRect(rect)
+        path.addRect(hole)
+        return path
     }
 }
